@@ -1,0 +1,18 @@
+# Scientific goals and constraints belong in research.md.
+[research]
+lookback_years = 3
+core_papers = 3
+allow_temporary_experts = true
+
+[backend]
+# manual: emit isolated worker requests; command: invoke an external agent driver.
+kind = "manual"
+# An argv array, never a shell string. Placeholders: {request}, {response}, {prompt}.
+command = []
+timeout_seconds = 1800
+
+[execution]
+max_parallel = 4
+max_worker_attempts = 2
+experiment_timeout_seconds = 21600
+paper_capabilities = [] # optional: "communication", "method_tools"

@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "expert_profiles": {
+    "domain": {
+      "path": "profiles/domain-expert.md"
+    },
+    "paper": {
+      "path": "profiles/paper-expert.md"
+    },
+    "consultant": {
+      "path": "profiles/temporary-expert.md"
+    }
+  },
+  "skills": {
+    "analyze-paper-communication": {
+      "path": "knowledge/analyze-paper-communication/SKILL.md",
+      "roles": [
+        "researcher",
+        "paper",
+        "domain"
+      ]
+    },
+    "reuse-and-update-expert": {
+      "path": "knowledge/reuse-and-update-expert/SKILL.md",
+      "roles": [
+        "researcher",
+        "paper",
+        "domain",
+        "verifier"
+      ]
+    },
+    "revise-hypotheses": {
+      "path": "ideation/revise-hypotheses/SKILL.md",
+      "roles": [
+        "domain",
+        "paper",
+        "consultant",
+        "researcher"
+      ]
+    },
+    "understand-paper": {
+      "path": "knowledge/understand-paper/SKILL.md",
+      "roles": [
+        "researcher",
+        "domain",
+        "paper",
+        "verifier"
+      ]
+    },
+    "distill-reasoning-patterns": {
+      "path": "knowledge/distill-reasoning-patterns/SKILL.md",
+      "roles": [
+        "researcher",
+        "domain",
+        "paper"
+      ]
+    },
+    "build-literature-corpus": {
+      "path": "knowledge/build-literature-corpus/SKILL.md",
+      "roles": [
+        "researcher",
+        "domain"
+      ]
+    },
+    "trace-paper-ideas": {
+      "path": "knowledge/trace-paper-ideas/SKILL.md",
+      "roles": [
+        "researcher",
+        "domain",
+        "paper"
+      ]
+    },
+    "build-domain-expert": {
+      "path": "knowledge/build-domain-expert/SKILL.md",
+      "roles": [
+        "domain",
+        "researcher",
+        "consultant"
+      ]
+    },
+    "select-paper-team": {
+      "path": "knowledge/select-paper-team/SKILL.md",
+      "roles": [
+        "domain",
+        "researcher"
+      ]
+    },
+    "build-paper-expert": {
+      "path": "knowledge/build-paper-expert/SKILL.md",
+      "roles": [
+        "paper",
+        "researcher"
+      ]
+    },
+    "verify-expert": {
+      "path": "knowledge/verify-expert/SKILL.md",
+      "roles": [
+        "verifier",
+        "domain",
+        "paper"
+      ]
+    },
+    "map-paper-code": {
+      "path": "engineering/map-paper-code/SKILL.md",
+      "roles": [
+        "engineer",
+        "paper",
+        "researcher"
+      ]
+    },
+    "build-method-tools": {
+      "path": "engineering/build-method-tools/SKILL.md",
+      "roles": [
+        "engineer",
+        "paper",
+        "researcher"
+      ]
+    },
+    "verify-method-tools": {
+      "path": "engineering/verify-method-tools/SKILL.md",
+      "roles": [
+        "verifier",
+        "engineer",
+        "paper",
+        "researcher"
+      ]
+    },
+    "generate-hypotheses": {
+      "path": "ideation/generate-hypotheses/SKILL.md",
+      "roles": [
+        "domain",
+        "paper",
+        "researcher",
+        "consultant"
+      ]
+    },
+    "challenge-claims": {
+      "path": "ideation/challenge-claims/SKILL.md",
+      "roles": [
+        "critic",
+        "domain",
+        "paper",
+        "verifier",
+        "consultant"
+      ]
+    },
+    "audit-novelty": {
+      "path": "ideation/audit-novelty/SKILL.md",
+      "roles": [
+        "critic",
+        "domain",
+        "researcher",
+        "verifier"
+      ]
+    },
+    "design-discriminating-experiments": {
+      "path": "ideation/design-discriminating-experiments/SKILL.md",
+      "roles": [
+        "domain",
+        "paper",
+        "engineer",
+        "researcher",
+        "critic"
+      ]
+    },
+    "synthesize-proposal": {
+      "path": "ideation/synthesize-proposal/SKILL.md",
+      "roles": [
+        "researcher",
+        "domain"
+      ]
+    },
+    "review-research": {
+      "path": "review/review-research/SKILL.md",
+      "roles": [
+        "critic",
+        "verifier",
+        "domain",
+        "paper"
+      ]
+    },
+    "moderate-discussion": {
+      "path": "ideation/moderate-discussion/SKILL.md",
+      "roles": [
+        "domain"
+      ]
+    }
+  }
+}
