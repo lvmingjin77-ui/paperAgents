@@ -1,18 +1,64 @@
-# Scientific goals and constraints belong in research.md.
+# API 预算是每次调用的保守预留，不是真实账单；0 表示无货币上限。
+# 当前串行调度。
+
 [research]
 lookback_years = 3
-core_papers = 3
+core_papers = 2
 allow_temporary_experts = true
 
 [backend]
-# manual: emit isolated worker requests; command: invoke an external agent driver.
 kind = "manual"
-# An argv array, never a shell string. Placeholders: {request}, {response}, {prompt}.
-command = []
 timeout_seconds = 1800
 
+[glm]
+model = "glm-5.2"
+fast_model = "glm-5.2"
+base_url = "https://open.bigmodel.cn/api/anthropic"
+api_key_env = "ZHIPU_API_KEY"
+search_mcp_url = "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp"
+agent_command = "claude"
+
 [execution]
-max_parallel = 4
 max_worker_attempts = 2
-experiment_timeout_seconds = 21600
-paper_capabilities = [] # optional: "communication", "method_tools"
+experiment_timeout_seconds = 3600
+sandbox = "auto"
+
+[resources]
+device = "local"
+memory_gb = 16
+gpu = ""
+wall_clock_days = 3
+api_budget = 0.0
+api_cost_per_call = 0.0
+max_worker_calls = 200
+python_executable = ""
+
+[data]
+allowed_sources = []
+download = true
+license_notes = "Use permitted sources; record provenance."
+
+[loops]
+screen_top_n = 2
+exploratory_slots = 1
+evolve_rounds = 2
+target_good = 2
+engineering_budget = 2
+seeds = [11, 29]
+confirm_seeds = [101, 211]
+test_seeds = [503]
+max_candidates_per_expert = 2
+outer_rounds = 2
+review_rounds = 2
+reviewers = 2
+
+[output]
+venue = "unspecified"
+template = "article"
+page_limit = 9
+anonymous = true
+
+[checkpoints]
+testbed = false
+final_method = false
+submission = false

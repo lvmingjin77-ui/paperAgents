@@ -1,2 +1,0 @@
-"""Circle-packing example task."""
-

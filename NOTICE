@@ -1,0 +1,14 @@
+PaperAgents
+https://github.com/lvmingjin77-ui/paperAgents
+
+PaperAgents was initially derived from SakanaAI/AI-Scientist-v3,
+commit df8313889a004f8a44a472e19a833cd547bb828a.
+https://github.com/SakanaAI/AI-Scientist-v3
+
+Upstream authors: Robert Tjarko Lange, Luca Grillotti, Yutaro Yamada,
+Rujikorn Charakorn, and David Ha.
+
+The 0.2 redesign replaces the original orchestration with PaperAgents'
+knowledge, experiment, evidence, and manuscript workflow. Retained upstream
+materials remain subject to their original notices and Apache-2.0 license.
+See LICENSE and docs/paperagents/upstream.md.

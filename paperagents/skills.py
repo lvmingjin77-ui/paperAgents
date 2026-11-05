@@ -1,4 +1,4 @@
-"""Resolve only the skills relevant to each worker assignment."""
+"""Task-scoped research capabilities; expert knowledge lives in reusable assets."""
 
 from __future__ import annotations
 
@@ -7,34 +7,49 @@ from pathlib import Path
 from .config import ROOT
 from .storage import read_json
 
-STAGE_SKILLS = {
-    "scope": ["build-literature-corpus"],
-    "corpus": ["build-literature-corpus", "understand-paper", "trace-paper-ideas"],
-    "domain": ["build-domain-expert", "distill-reasoning-patterns"],
-    "selection": ["select-paper-team"],
-    "paper": ["build-paper-expert", "understand-paper", "trace-paper-ideas",
-              "distill-reasoning-patterns", "map-paper-code"],
-    "consultant": ["build-domain-expert"],
-    "expert_review": ["verify-expert"],
-    "hypothesis": ["generate-hypotheses"],
-    "challenge": ["challenge-claims"],
-    "novelty": ["audit-novelty"],
-    "synthesis": ["design-discriminating-experiments", "synthesize-proposal"],
-    "proposal_review": ["review-research"],
-    "evidence": ["review-research"],
-    "reading": ["understand-paper", "trace-paper-ideas"],
-    "triage": ["audit-novelty"],
-    "agenda": ["moderate-discussion"],
-    "merge": ["revise-hypotheses"],
-    "rebuttal": ["revise-hypotheses", "design-discriminating-experiments"],
-    "recheck": ["challenge-claims"],
-    "experiment_build": ["design-discriminating-experiments", "build-method-tools"],
-    "experiment_review": ["verify-method-tools", "review-research"],
-}
 
-PAPER_CAPABILITY_SKILLS = {
-    "communication": ["analyze-paper-communication"],
-    "method_tools": ["build-method-tools", "verify-method-tools"],
+STAGE_SKILLS = {
+    "final_judgment": ["review-paper"],
+    "scope": ["build-literature-corpus"],
+    "corpus": ["build-literature-corpus"],
+    "reading": ["read-paper-card"],
+    "domain": ["build-domain-expert"],
+    "selection": ["select-paper-team"],
+    "paper": [
+        "build-paper-expert",
+        "understand-paper",
+        "trace-paper-ideas",
+        "distill-reasoning-patterns",
+        "map-paper-code",
+        "analyze-paper-communication",
+    ],
+    "consultant": ["build-domain-expert", "trace-paper-ideas", "distill-reasoning-patterns"],
+    "expert_review": ["verify-expert"],
+    "propose": ["generate-hypotheses"],
+    "exchange": ["exchange-ideas"],
+    "revise": ["exchange-ideas", "explain-and-evolve"],
+    "triage": ["exchange-ideas", "audit-novelty"],
+    "merge": ["exchange-ideas"],
+    "assess": ["challenge-claims"],
+    "select": ["challenge-claims"],
+    "build_testbed": ["build-testbed", "build-method-tools"],
+    "protocol_review": ["build-testbed", "verify-method-tools"],
+    "build": ["build-method-tools"],
+    "implementation_review": ["verify-method-tools"],
+    "judge": ["screen-and-diagnose"],
+    "explain": ["screen-and-diagnose", "explain-and-evolve"],
+    "evolve": ["explain-and-evolve", "generate-hypotheses"],
+    "novelty": ["audit-novelty"],
+    "ablation_plan": ["plan-ablation"],
+    "ablation_review": ["plan-ablation", "screen-and-diagnose"],
+    "freeze": ["screen-and-diagnose", "verify-method-tools"],
+    "write_section": ["write-section"],
+    "rebuttal": ["review-paper", "write-section"],
+    "testbed_plan": ["build-testbed"],
+    "write": ["write-section"],
+    "peer_review": ["review-paper"],
+    "meta_review": ["review-paper"],
+    "finalize": ["write-section", "review-paper"],
 }
 
 
@@ -42,25 +57,10 @@ def resolve_skills(stage: str, root: Path | None = None, *, context: dict | None
     root = (root or ROOT / "skills").resolve()
     registry = read_json(root / "registry.json")["skills"]
     names = list(STAGE_SKILLS[stage])
-    context = context or {}
-    if stage == "corpus" and context.get("per_paper_reading"):
-        # v3 assigns reading to separate per-paper tasks.
-        names = ["build-literature-corpus"]
-    if stage == "paper":
-        capabilities = context.get("paper_capabilities", [])
-        if not isinstance(capabilities, list) or any(
-                not isinstance(item, str) or item not in PAPER_CAPABILITY_SKILLS
-                for item in capabilities):
-            raise ValueError("paper_capabilities must be a list containing only communication or method_tools")
-        for capability, skill_ids in PAPER_CAPABILITY_SKILLS.items():
-            if capability in capabilities:
-                names.extend(skill_ids)
-    if stage in {"domain", "paper"} and context.get("reuse_candidates"):
+    if (context or {}).get("reuse_candidates"):
         names.insert(0, "reuse-and-update-expert")
-    if stage == "hypothesis" and context.get("revision_context"):
-        names.append("revise-hypotheses")
     result = []
-    for name in names:
+    for name in dict.fromkeys(names):
         path = (root / registry[name]["path"]).resolve()
         if not path.is_relative_to(root) or not path.is_file():
             raise ValueError(f"Invalid skill path for {name}")
@@ -69,12 +69,11 @@ def resolve_skills(stage: str, root: Path | None = None, *, context: dict | None
 
 
 def resolve_expert_profile(role: str, root: Path | None = None) -> dict | None:
-    """Profiles define how an expert uses skills; they are not additional skills."""
     root = (root or ROOT / "skills").resolve()
-    profiles = read_json(root / "registry.json").get("expert_profiles", {})
+    profiles = read_json(root / "registry.json")["expert_profiles"]
     if role not in profiles:
         return None
     path = (root / profiles[role]["path"]).resolve()
     if not path.is_relative_to(root) or not path.is_file():
-        raise ValueError(f"Invalid expert profile path for {role}")
+        raise ValueError(f"Invalid expert profile for {role}")
     return {"id": role, "path": str(path), "instructions": path.read_text(encoding="utf-8")}

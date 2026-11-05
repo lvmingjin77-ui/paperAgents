@@ -1,190 +1,40 @@
 <!doctype html>
-<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PaperAgents 运行面板</title>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PaperAgents · 研究工作台</title>
 <style>
-:root{--bg:#fafaf8;--fg:#1d1d1b;--mute:#76746e;--line:#e3e1db;--card:#fff;--ok:#2f7d4f;--bad:#b3261e;--run:#2a5db0;--warn:#a46a00}
-@media(prefers-color-scheme:dark){:root{--bg:#161615;--fg:#e8e6e1;--mute:#9a978f;--line:#2e2d2a;--card:#1e1e1c;--ok:#5fbf86;--bad:#ef7a72;--run:#7ea6ec;--warn:#e0b04d}}
-*{box-sizing:border-box}body{margin:0;font:14px/1.5 -apple-system,"PingFang SC",system-ui,sans-serif;background:var(--bg);color:var(--fg)}
-header{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-header b{font-size:15px}select{font:inherit;padding:2px 6px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:4px}
-.status{padding:2px 8px;border-radius:10px;border:1px solid var(--line);font-size:12px}
-main{display:grid;grid-template-columns:230px 1fr;height:calc(100vh - 49px)}
-nav{border-right:1px solid var(--line);overflow:auto;padding:8px 0}
-nav div{padding:4px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:6px}nav div:hover{background:var(--line)}
-nav .cur{font-weight:600;color:var(--run)}nav .sel{background:var(--line)}
-section{overflow:auto;padding:12px 18px}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;position:sticky;top:-12px;background:var(--bg);padding-top:4px}
-.tabs button{font:inherit;border:0;background:none;color:var(--mute);padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent}
-.tabs button.on{color:var(--fg);border-color:var(--fg)}
-.c{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:8px}
-.row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.mute{color:var(--mute);font-size:12px}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.run{color:var(--run)}.warn{color:var(--warn)}
-pre{white-space:pre-wrap;word-break:break-word;margin:4px 0;font:12px/1.45 ui-monospace,Menlo,monospace;max-height:420px;overflow:auto}
-details>summary{cursor:pointer;color:var(--mute);margin:4px 0}
-.msg{border-left:3px solid var(--line);padding:6px 10px;margin:6px 0;background:var(--card)}
-.msg .who{font-weight:600}.k-异议,.k-异议（阻塞）{border-color:var(--bad)}.msg[data-k^="答辩"]{border-color:var(--run)}.msg[data-k^="复核"]{border-color:var(--warn)}.msg[data-k="提案"],.msg[data-k^="修订"]{border-color:var(--ok)}
-table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top;font-size:13px}
-input[type=search]{font:inherit;padding:3px 8px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg)}
-.graph-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:12px}.graph-stage{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}#graph-canvas{width:100%;height:620px;display:block;touch-action:none;cursor:grab}.graph-detail{max-height:680px;overflow:auto;overflow-wrap:anywhere}.graph-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.graph-controls button,.graph-node{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:5px;padding:5px 9px;cursor:pointer}.graph-node{display:block;text-align:left;width:100%;margin:5px 0}.graph-legend{display:flex;gap:16px;margin:10px 0}.graph-detail h3{font-size:15px}.graph-detail p{font-size:13px}.graph-hint{position:absolute;bottom:10px;left:12px;pointer-events:none}.graph-detail pre{max-height:200px}@media(max-width:1000px){.graph-layout{grid-template-columns:1fr}.graph-detail{max-height:350px}#graph-canvas{height:480px}}
-</style></head><body>
-<header><b>PaperAgents</b><select id="run"></select><span id="st" class="status"></span><span id="reason" class="mute"></span>
-<span style="flex:1"></span><label class="mute"><input type="checkbox" id="live" checked> 实时刷新</label></header>
-<main><nav id="phases"></nav><section>
-<div class="tabs" id="tabs"></div><div id="view"></div></section></main>
+:root{font:15px/1.6 system-ui,-apple-system,sans-serif;color:#182329;background:#f5f6f4;--line:#dce2dc;--accent:#216653}*{box-sizing:border-box}body{margin:0}header{height:75px;display:flex;align-items:center;gap:20px;padding:0 28px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}h1{font-size:21px;margin:0;letter-spacing:-.5px}header small{color:#7b867e}select,input,button{font:inherit;border:1px solid var(--line);border-radius:7px;background:#fff;padding:7px 10px}button{cursor:pointer;color:var(--accent)}button:hover{background:#edf4ef}.status{font-size:13px;border-radius:20px;background:#e6f0e8;padding:4px 12px;overflow-wrap:anywhere}header label{margin-left:auto;white-space:nowrap}.layout{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 75px)}aside{padding:22px 16px;border-right:1px solid var(--line);position:sticky;top:75px;height:calc(100vh - 75px);overflow:auto;background:#fbfcfa}aside button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;margin:3px 0}aside button.active{background:#e4ede6;color:#144a3c;font-weight:600}aside small{display:block;color:#78867e;padding:8px 12px}main{padding:24px 32px;min-width:0;max-width:1600px;width:100%}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.toolbar h2{font-size:22px;margin:0}#query{width:240px}.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin:0 0 14px;overflow-wrap:anywhere}.card h3{font-size:16px;margin:0 0 8px}.meta{display:flex;gap:12px;flex-wrap:wrap;color:#6d7a71;font-size:13px;margin-bottom:10px}.pill{background:#eef2ee;border-radius:4px;padding:1px 7px;color:#365342}pre{font:13px/1.6 ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap;word-break:break-word;background:#f7f9f7;border-radius:6px;padding:12px;max-height:600px;overflow:auto;margin:8px 0}details{margin:7px 0}summary{cursor:pointer;color:#3f5f4e;padding:3px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}.number{font-size:30px;font-weight:600;color:#205b47}.empty{padding:60px 10px;color:#7c877e;text-align:center}.error{color:#a03630;background:#fff0ed;border-color:#edc9c1}.kv{display:grid;grid-template-columns:minmax(110px,180px) 1fr;gap:8px;border-bottom:1px solid #eef1ec;padding:5px 0}.kv>span:first-child{color:#728076;font-size:13px}.kv>div{min-width:0}a{color:#216653}svg{max-width:100%;height:auto}svg text{font:12px system-ui;fill:#364b3c}footer{font-size:12px;color:#889388;padding:10px 0}.log-item{border-left:2px solid #dbe5db;padding-left:10px}.badge-failed,.badge-refuted{color:#a03630;background:#fbece8}.badge-supported,.badge-completed{color:#216653;background:#e3f0e8}.event{display:grid;grid-template-columns:180px 1fr;gap:15px;margin:9px 0}.hint{color:#7c877e;font-size:13px}.row{display:flex;align-items:center;gap:10px;justify-content:space-between}.mono{font-family:ui-monospace,monospace;font-size:13px}@media(max-width:800px){header{height:auto;min-height:70px;flex-wrap:wrap;padding:12px;gap:8px}.layout{grid-template-columns:1fr}aside{position:static;height:auto;display:flex;overflow:auto;padding:6px}aside button{white-space:nowrap;width:auto}aside small{display:none}main{padding:18px 12px}.event{grid-template-columns:1fr}.toolbar{flex-wrap:wrap}#query{width:100%}}
+</style>
+<header><div><h1>PaperAgents</h1><small>研究过程与证据</small></div><select id="runSelect" aria-label="研究运行"></select><span id="status" class="status">正在读取</span><label><input id="live" type="checkbox" checked> 实时刷新</label></header>
+<div class="layout"><aside id="nav"></aside><main><div class="toolbar"><h2 id="heading">研究概览</h2><input id="query" aria-label="筛选当前视图" placeholder="筛选当前视图…"></div><div id="notice"></div><div id="content"></div><footer>仅查看。页面刷新不会启动任务或改变研究状态；时间显示为北京时间。</footer></main></div>
 <script>
-const $=s=>document.querySelector(s), esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-const J=o=>"<pre>"+esc(JSON.stringify(o,null,2))+"</pre>", get=async u=>(await fetch(u)).json();
-const timeFormat=new Intl.DateTimeFormat("zh-CN",{timeZone:"Asia/Shanghai",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
-function localTime(value){const date=new Date(value);return Number.isNaN(date.getTime())?esc(value):timeFormat.format(date).replaceAll("/","-")}
-const TABS={pool:"对话池",tasks:"任务",errors:"错误",experts:"专家",graph:"领域图谱",exp:"实验",events:"时间线",brief:"研究简介"};
-let S={run:null,tab:"pool",phase:null,data:null,open:{}};
-const attemptFolds=new Map();
-function attemptAttrs(task,attempt,initialOpen){
-  const key=encodeURIComponent(S.run+"/"+task+"/"+attempt);
-  return `data-fold="${key}" ${(attemptFolds.get(key)??initialOpen)?"open":""}`;
-}
-const cls=s=>({completed:"ok",invalid:"bad",running:"run",pending:"mute",needs_evidence:"bad",awaiting_workers:"run"}[s]||"");
-$("#tabs").innerHTML=Object.entries(TABS).map(([k,v])=>`<button data-t="${k}">${v}</button>`).join("");
-$("#tabs").onclick=e=>{if(e.target.dataset.t){S.tab=e.target.dataset.t;if(S.tab=="errors"){S.toolErrors=null;refresh()}render()}};
-$("#run").onchange=e=>{S.run=e.target.value;S.phase=null;refresh()};
-async function refresh(){
-  const r=await get("/api/runs"); if(!r.runs.length){$("#view").innerHTML="<p class=mute>还没有运行。执行 paperagents run 后这里会出现。</p>";return}
-  if(!S.run)S.run=r.active||r.runs[0].run_id;
-  $("#run").innerHTML=r.runs.map(x=>`<option value="${x.run_id}" ${x.run_id==S.run?"selected":""}>${x.run_id}${x.run_id==r.active?"（当前）":""}</option>`).join("");
-  S.data=await get("/api/run?run="+S.run);
-  if(["pool"].includes(S.tab))S.pool=await get("/api/pool?run="+S.run);
-  if(S.tab=="experts")S.experts=await get("/api/experts?run="+S.run);
-  if(S.tab=="errors")S.toolErrors=await get("/api/tool-errors?run="+S.run);
-  render();
-}
-function render(){
-  const d=S.data; if(!d)return; const st=d.state;
-  $("#st").textContent=`${st.status||""} · 第${st.iteration||1}轮构思`+(st.debate_round?` · 讨论第${st.debate_round}轮`:"");$("#st").className="status "+cls(st.status);
-  $("#reason").textContent=st.reason||"";
-  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t==S.tab));
-  $("#phases").innerHTML=d.phases.map((p,i)=>{const ts=d.tasks.filter(t=>t.phase==p),done=ts.filter(t=>t.status=="completed").length,bad=ts.some(t=>t.status=="invalid");
-    const current=d.current_phase? p==d.current_phase : i==d.phase_index;
-    const mark=current?"▶":p=="evidence"?(ts.length&&done==ts.length?"✓":"·"):i<d.phase_index?"✓":"·";
-    return `<div data-p="${p}" class="${current?"cur":""} ${S.phase==p?"sel":""}"><span>${mark} ${p}</span><span class="${bad?"bad":"mute"}">${ts.length?done+"/"+ts.length:""}${bad?" !":""}</span></div>`}).join("")
-    +(d.experiments.length?`<div data-p="__exp"><span>⚗ 实验</span><span class=mute>${d.experiments.length}</span></div>`:"");
-  $("#phases").onclick=e=>{const p=e.target.closest("[data-p]")?.dataset.p;if(!p)return;if(p=="__exp"){S.tab="exp"}else{S.phase=S.phase==p?null:p;S.tab="tasks"}render()};
-  document.querySelectorAll("#view details[data-fold]").forEach(el=>attemptFolds.set(el.dataset.fold,el.open));
-  if(S.tab=="graph"&&$("#graph-canvas")?.dataset.run==S.run)return;
-  $("#view").innerHTML=V[S.tab]();
-}
-const V={
- pool(){const m=S.pool||[];if(!m.length)return"<p class=mute>讨论还没开始。专家提案、异议、答辩、复核、综合与评审会依次出现在这里。</p>";
-  let last="";return`<input type=search placeholder="筛选：专家 / 候选 / 异议编号 / 关键词" oninput="filterPool(this.value)"><div id=pool>`+m.map(x=>{
-   const head=x.stage+(x.round?` 第${x.round}轮`:"")+` · 构思第${+x.iteration}轮`;const sep=head!=last?`<h4 class=mute>${esc(head)}</h4>`:"";last=head;
-   return sep+`<div class="msg" data-k="${esc(x.kind)}" data-s="${esc((x.speaker+" "+x.target+" "+(x.id||"")+" "+x.text).toLowerCase())}"><div class=row><span class=who>${esc(x.speaker)}</span><span class="${x.kind.includes("阻塞")?"bad":""}">${esc(x.kind)}</span>${x.id?`<code>${esc(x.id)}</code>`:""}${x.target?`<span class=mute>→ ${esc(x.target)}</span>`:""}<span style=flex:1></span><a class=mute href="#" onclick="openTask('${x.task}');return false">任务</a></div><pre>${esc(x.text)}</pre></div>`}).join("")+"</div>"},
- tasks(){const ts=S.data.tasks.filter(t=>!S.phase||t.phase==S.phase);
-  return(S.phase?`<p>阶段 <b>${S.phase}</b> · <a href=# onclick="S.phase=null;render();return false">显示全部</a></p>`:"")+
-   ts.map(t=>`<div class=c><div class=row><b>${esc(t.task_id)}</b><span class="${cls(t.status)}">${t.status}</span><span class=mute>${esc(t.subject_id)} · 尝试 ${t.attempts||0}${t.round?" · 第"+t.round+"轮":""}</span><span style=flex:1></span><a href=# onclick="openTask('${t.task_id}');return false">${S.open[t.task_id]?"收起":"展开"}</a></div>${t.error?`<div class=bad>${esc(t.error)}</div>`:""}<div id="t-${t.task_id}">${S.open[t.task_id]?taskHTML(S.open[t.task_id],t.task_id):""}</div></div>`).join("")||"<p class=mute>本阶段尚无任务</p>"},
- errors(){const bad=S.data.tasks.filter(t=>t.error||t.status=="invalid"),ev=S.data.events.filter(e=>["rejected","stopped"].includes(e.kind));
-  return(S.data.state.status=="needs_evidence"?`<div class="c bad"><b>运行停止</b><br>${esc(S.data.state.reason)}</div>`:"")+
-  "<h4>当前失败的任务</h4>"+(bad.map(t=>`<div class=c><div class=row><b>${t.task_id}</b><span class=mute>${t.subject_id}</span><a href=# onclick="S.tab='tasks';S.phase='${t.phase}';openTask('${t.task_id}');return false">查看</a></div><div class=bad>${esc(t.error)}</div></div>`).join("")||"<p class=mute>无</p>")+
-  "<h4>历史拒绝与停止</h4><p class=mute>时间：北京时间（UTC+8）</p><table>"+ev.reverse().map(e=>`<tr><td class=mute>${localTime(e.ts)}</td><td>${e.kind}</td><td>${esc(e.task||e.phase||"")}</td><td class=bad>${esc(e.error||e.reason)}</td></tr>`).join("")+"</table>"+
-  `<h4>工具调用错误 (${S.toolErrors?.length??"…"})</h4><p class=mute>历史调用失败，不等于整个任务失败；后续继续运行也不表示该错误已解决。</p>`+
-  (S.toolErrors==null?"<p class=mute>正在读取工具日志…</p>":S.toolErrors.slice().reverse().map(e=>`<div class=c><div class=row><b>${esc(e.tool)}</b><span class=mute>${esc(e.task_id)} · 尝试 ${esc(e.attempt)} · 日志第 ${e.line} 条</span><a href=# onclick="S.tab='tasks';S.phase=null;openTask('${e.task_id}');return false">查看任务</a></div><pre class=bad>${esc(e.error)}</pre></div>`).join("")||"<p class=mute>无工具调用错误</p>")},
- experts(){return(S.experts||[]).map(x=>`<div class=c><div class=row><b>${esc(x.expert_id)}</b><span class=mute>${x.stage}</span>${x.review?`<span class="${x.review.accepted?"ok":"bad"}">验收${x.review.accepted?"通过":"未通过"}</span>`:""}<span style=flex:1></span><a href=# onclick="openTask('${x.task_id}');S.tab='tasks';return false">知识包</a></div>
-  <div class=mute>知识：${esc(x.knowledge_keys.join("、"))}</div>${x.asset?`<div class=mute>资产：${esc(x.asset)}</div>`:""}
-  <details><summary>局限 (${(x.limitations||[]).length})</summary>${J(x.limitations)}</details>
-  ${x.review?`<details><summary>验收检查</summary>${J(x.review.checks)}</details>`:""}
-  <details><summary>工作笔记 (${x.notebook.length})</summary>${x.notebook.map(n=>`<div class=mute>${n.stage} ${n.task_id}</div><pre>${esc((n.notes||[]).join("\n"))}</pre>`).join("")}</details></div>`).join("")||"<p class=mute>专家尚未构建</p>"},
- graph(){const g=S.data.graph;if(!g)return"<p class=mute>领域图谱在逐篇阅读完成后生成。</p>";
-  const run=S.run;setTimeout(()=>mountGraph(g,run),0);return"<div id=gv>正在加载关系图…</div>"},
- exp(){return S.data.experiments.map(x=>`<div class=c><div class=row><b>${x.cycle}</b><span class="${cls(x.status)}">${x.phase} · ${x.status}</span></div>${x.reason?`<div class=bad>${esc(x.reason)}</div>`:""}
-  <table>${Object.entries(x.results||{}).map(([k,v])=>`<tr><td>${k}</td><td class="${cls(v.status)}">${v.status}</td><td>${esc(JSON.stringify(v.metrics||v.reason||""))}</td></tr>`).join("")}</table>
-  ${(x.required_tests||[]).length?`<details><summary>必做测试 (${x.required_tests.length})</summary>${J(x.required_tests)}</details>`:""}
-  <details><summary>提案</summary>${J(x.proposal)}</details>${x.build?`<details><summary>构建与协议</summary>${J(x.build)}</details>`:""}${x.review?`<details><summary>实验评审</summary>${J(x.review)}</details>`:""}</div>`).join("")||"<p class=mute>尚无实验</p>"},
- events(){return"<p class=mute>时间：北京时间（UTC+8）</p><table>"+S.data.events.slice().reverse().map(e=>{const{ts,kind,...r}=e;return`<tr><td class=mute style="white-space:nowrap">${localTime(ts)}</td><td class="${kind=="rejected"||kind=="stopped"?"bad":kind=="accepted"?"ok":""}">${kind}</td><td><pre>${esc(JSON.stringify(r))}</pre></td></tr>`}).join("")+"</table>"},
- brief(){return`<pre>${esc(S.data.brief)}</pre>`+J(S.data.state)}
-};
-const graphStates=new Map();
-async function mountGraph(path,run){
- const host=$("#gv");if(!host)return;
- try{
-  const response=await get("/api/file?path="+encodeURIComponent(path+"/graph.json"));
-  if(!host.isConnected||S.run!=run)return;
-  if(response.error)throw new Error(response.error);
-  const G=JSON.parse(response.text),nodes=[],edges=[],byId=new Map();
-  const colors={paper:"#4c86dd",problem:"#d39132",method:"#46a485",external:"#9795ab"};
-  const names={paper:"论文",problem:"问题",method:"方法",external:"外部论文"};
-  const add=(id,label,type,data)=>{if(!byId.has(id)){const n={id,label,type,data,degree:0};nodes.push(n);byId.set(id,n)}return id};
-  const link=(source,target,label,note="")=>{if(byId.has(source)&&byId.has(target)){edges.push({source,target,label,note});byId.get(source).degree++;byId.get(target).degree++}};
-  Object.entries(G.papers).forEach(([id,title])=>add("p:"+id,title,"paper",id));
-  Object.entries(G.problems).forEach(([id,p])=>{const k=add("q:"+id,p.label,"problem",p);p.paper_ids.forEach(pid=>link("p:"+pid,k,"研究问题"))});
-  Object.entries(G.methods).forEach(([id,m])=>{const k=add("m:"+id,m.label,"method",m);m.paper_ids.forEach(pid=>link("p:"+pid,k,"涉及方法"));m.problems.forEach(q=>link(k,"q:"+q,"对应问题"))});
-  G.relations.forEach(r=>link("p:"+r.source,"p:"+r.paper_id,r.relation,r.note));
-  (G.external_relations||[]).forEach(r=>{add("e:"+r.paper_id,r.paper_id,"external",r.paper_id);link("p:"+r.source,"e:"+r.paper_id,r.relation,r.note)});
-  // A deterministic 3D layout; positions express connectivity, not scientific distance.
-  nodes.forEach((n,i)=>{const z=1-2*(i+.5)/nodes.length,a=i*2.39996323,r=Math.sqrt(1-z*z);n.pos=[r*Math.cos(a)*180,r*Math.sin(a)*180,z*180]});
-  for(let iter=0;iter<100;iter++){
-   const force=nodes.map(()=>[0,0,0]),idx=new Map(nodes.map((n,i)=>[n.id,i]));
-   for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
-    const d=nodes[i].pos.map((v,k)=>v-nodes[j].pos[k]),sq=d.reduce((a,v)=>a+v*v,0)+80,f=700/(sq*Math.sqrt(sq));
-    for(let k=0;k<3;k++){force[i][k]+=d[k]*f;force[j][k]-=d[k]*f}
-   }
-   edges.forEach(e=>{const i=idx.get(e.source),j=idx.get(e.target),d=nodes[j].pos.map((v,k)=>v-nodes[i].pos[k]),len=Math.hypot(...d)||1,f=(len-65)*.003;
-    for(let k=0;k<3;k++){force[i][k]+=d[k]/len*f;force[j][k]-=d[k]/len*f}});
-   nodes.forEach((n,i)=>n.pos=n.pos.map((v,k)=>v+force[i][k]*4-v*.001));
-  }
-  const state=graphStates.get(run)||{yaw:.3,pitch:.2,zoom:1,selected:null,query:"",flat:false};graphStates.set(run,state);
-  host.innerHTML=`<div class="graph-controls"><input id="graph-search" type="search" aria-label="搜索图谱节点" placeholder="搜索论文、问题或方法"><button id="graph-mode"></button><button id="graph-reset">重置视角</button><span class=mute>${nodes.length} 个节点 · ${edges.length} 条关系</span></div><div class="graph-legend">${Object.keys(colors).map(k=>`<span style="color:${colors[k]}">● ${names[k]}</span>`).join("")}</div><div class="graph-layout"><div class="graph-stage"><canvas id="graph-canvas" tabindex="0" aria-label="领域关系图。方向键旋转，加减键缩放；可通过右侧节点列表选择。"></canvas><div class="graph-hint mute">拖动旋转 · 滚轮缩放 · 点击节点查看依据<br>空间位置仅用于布局，不代表科学相似度</div></div><aside id="graph-detail" class="graph-detail c"></aside></div><details class=c><summary>原始图谱数据</summary>${J(G)}</details>`;
-  const canvas=$("#graph-canvas"),ctx=canvas.getContext("2d"),detail=$("#graph-detail");canvas.dataset.run=run;
-  let projected=[],drag=null;
-  const matching=n=>!state.query||(n.label+" "+n.id).toLowerCase().includes(state.query.toLowerCase());
-  function select(id){state.selected=id;details();draw()}
-  function details(){
-   const n=byId.get(state.selected),list=state.query?nodes.filter(matching):nodes.filter(n=>n.type=="paper");
-   if(!n){detail.innerHTML=`<h3>${state.query?"搜索结果":"论文列表"} (${list.length})</h3><p class=mute>选择节点查看完整名称、关联和证据。可通过搜索定位问题与方法。</p>`+list.map(n=>`<button class=graph-node data-node="${encodeURIComponent(n.id)}">${esc(n.label)}</button>`).join("")}
-   else{
-    const connected=edges.filter(e=>e.source==n.id||e.target==n.id),results=G.results.filter(r=>n.type=="paper"?r.paper_id==n.data:n.type=="method"?r.method==n.label:n.type=="problem"?n.data.paper_ids.includes(r.paper_id):false);
-    detail.innerHTML=`<button class=graph-node id="graph-back">← 返回节点列表</button><span style="color:${colors[n.type]}">${names[n.type]}</span><h3>${esc(n.label)}</h3><p class=mute>${esc(n.id.slice(2))}</p><h4>关系与依据 (${connected.length})</h4>`+connected.map(e=>{const other=byId.get(e.source==n.id?e.target:e.source);return`<div class=c><span class=mute>${esc(byId.get(e.source).label)} → ${esc(e.label)} → ${esc(byId.get(e.target).label)}</span><button class=graph-node data-node="${encodeURIComponent(other.id)}">${esc(other.label)}</button>${e.note?`<p>${esc(e.note)}</p>`:""}</div>`}).join("")+`<h4>实验结果 (${results.length})</h4>`+results.map(r=>`<div class=c><b>${esc(r.benchmark)} · ${esc(r.metric)}</b><p>${esc(r.value)}</p><p class=mute>${esc(r.condition)}<br>来源：${esc(G.papers[r.paper_id]||r.paper_id)}</p></div>`).join("");
-    $("#graph-back").onclick=()=>select(null);
-   }
-   detail.querySelectorAll("[data-node]").forEach(b=>b.onclick=()=>select(decodeURIComponent(b.dataset.node)));detail.scrollTop=0;
-  }
-  function draw(){
-   if(!canvas.isConnected)return;
-   const w=canvas.clientWidth,h=canvas.clientHeight,dpr=window.devicePixelRatio||1;
-   canvas.width=w*dpr;canvas.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
-   const text=getComputedStyle(document.body).getPropertyValue("--fg"),focus=new Set();
-   if(state.selected){focus.add(state.selected);edges.forEach(e=>{if(e.source==state.selected)focus.add(e.target);if(e.target==state.selected)focus.add(e.source)})}
-   const extent=Math.max(100,...nodes.map(n=>Math.hypot(...n.pos))),scale=Math.min(w,h)*.36/extent*state.zoom;
-   projected=nodes.map(n=>{let[x,y,z]=n.pos;const xx=x*Math.cos(state.yaw)+z*Math.sin(state.yaw),zz=-x*Math.sin(state.yaw)+z*Math.cos(state.yaw),yy=y*Math.cos(state.pitch)-zz*Math.sin(state.pitch),depth=y*Math.sin(state.pitch)+zz*Math.cos(state.pitch);const perspective=state.flat?1:700/(700+depth);return{n,x:w/2+xx*scale*perspective,y:h/2+yy*scale*perspective,z:depth,r:(n.type=="paper"?6:4)*Math.sqrt(state.zoom)*perspective}});
-   const points=new Map(projected.map(p=>[p.n.id,p]));
-   edges.forEach(e=>{const a=points.get(e.source),b=points.get(e.target),hot=state.selected&&(e.source==state.selected||e.target==state.selected);ctx.globalAlpha=state.selected?(hot ? .8 : .06):.2;ctx.strokeStyle=hot?colors[byId.get(state.selected).type]:"#8793a4";ctx.lineWidth=hot?1.6:.7;ctx.setLineDash(e.source.startsWith("e:")||e.target.startsWith("e:")?[3,3]:[]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()});ctx.setLineDash([]);
-   projected.sort((a,b)=>b.z-a.z).forEach(p=>{const n=p.n,active=matching(n)&&(!state.selected||focus.has(n.id));ctx.globalAlpha=active?1:.12;ctx.fillStyle=colors[n.type];ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();if(n.id==state.selected){ctx.strokeStyle=text;ctx.lineWidth=2;ctx.stroke()}if(active&&(state.query||state.selected||n.type=="paper")){ctx.fillStyle=text;ctx.font="11px system-ui";const label=n.type=="paper"&&!state.selected&&!state.query?n.data:n.label;ctx.fillText(label.length>42?label.slice(0,40)+"…":label,p.x+p.r+4,p.y+4)}});ctx.globalAlpha=1;
-   $("#graph-mode").textContent=state.flat?"切换三维":"切换二维";
-  }
-  $("#graph-search").value=state.query;$("#graph-search").oninput=e=>{state.query=e.target.value;state.selected=null;details();draw()};
-  $("#graph-mode").onclick=()=>{state.flat=!state.flat;if(state.flat){state.yaw=0;state.pitch=0}draw()};
-  $("#graph-reset").onclick=()=>{Object.assign(state,{yaw:.3,pitch:.2,zoom:1,selected:null,query:"",flat:false});$("#graph-search").value="";details();draw()};
-  canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY};canvas.setPointerCapture(e.pointerId)};
-  canvas.onpointermove=e=>{if(!drag)return;if(!state.flat){state.yaw+=(e.clientX-drag.x)*.006;state.pitch+=(e.clientY-drag.y)*.006}drag.x=e.clientX;drag.y=e.clientY;draw()};
-  canvas.onpointerup=e=>{if(drag&&Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)<5){const b=canvas.getBoundingClientRect(),hits=projected.filter(p=>Math.hypot(p.x-(e.clientX-b.left),p.y-(e.clientY-b.top))<p.r+6&&matching(p.n));select(hits.at(-1)?.n.id||null)}drag=null};canvas.onpointercancel=()=>drag=null;
-  canvas.onwheel=e=>{e.preventDefault();state.zoom=Math.max(.3,Math.min(5,state.zoom*Math.exp(-e.deltaY*.001)));draw()};
-  canvas.onkeydown=e=>{if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","+","=","-"].includes(e.key))return;e.preventDefault();if(e.key=="ArrowLeft")state.yaw-=.1;if(e.key=="ArrowRight")state.yaw+=.1;if(e.key=="ArrowUp")state.pitch-=.1;if(e.key=="ArrowDown")state.pitch+=.1;if(e.key=="+"||e.key=="=")state.zoom=Math.min(5,state.zoom*1.1);if(e.key=="-")state.zoom=Math.max(.3,state.zoom/1.1);draw()};
-  const observer=new ResizeObserver(()=>{if(!canvas.isConnected){observer.disconnect();return}draw()});observer.observe(canvas);details();draw();
- }catch(e){if(host.isConnected)host.textContent="图谱加载失败："+e.message}
-}
-function filterPool(q){q=q.toLowerCase();document.querySelectorAll("#pool .msg").forEach(m=>m.style.display=m.dataset.s.includes(q)?"":"none")}
-async function openTask(id){if(S.open[id]&&S.tab=="tasks"){delete S.open[id];return render()}S.open[id]=await get(`/api/task?run=${S.run}&task=${id}`);if(S.tab!="tasks"){S.tab="tasks";S.phase=S.data.tasks.find(t=>t.task_id==id)?.phase}render();document.getElementById("t-"+id)?.scrollIntoView({block:"nearest"})}
-function step(m){ // one line of a Claude Code stream-json transcript
-  if(m.type=="raw")return`<div class=mute>${esc(m.text)}</div>`;
-  if(m.type=="system")return`<div class=mute>⚙ ${esc(m.subtype||"")} ${esc(m.model||"")}</div>`;
-  if(m.type=="result")return`<div class="${m.is_error?"bad":"ok"}">■ 结束：${esc(m.subtype)} · ${m.num_turns??""} 轮 · ${Math.round((m.duration_ms||0)/1000)}s${m.usage?` · 输入 ${m.usage.input_tokens} / 输出 ${m.usage.output_tokens} tokens`:""}</div>`;
-  const c=m.message?.content;if(!Array.isArray(c))return"";
-  return c.map(b=>b.type=="text"?`<div class=msg data-k=提案><pre>${esc(b.text)}</pre></div>`:b.type=="thinking"?`<details><summary>💭 思考</summary><pre>${esc(b.thinking)}</pre></details>`:
-   b.type=="tool_use"?`<div class=run>→ ${esc(b.name)} <span class=mute>${esc(JSON.stringify(b.input).slice(0,300))}</span></div>`:
-   b.type=="tool_result"?`<details><summary class="${b.is_error?"bad":""}">← 工具结果${b.is_error?"（错误）":""}</summary><pre>${esc(typeof b.content=="string"?b.content:JSON.stringify(b.content)).slice(0,4000)}</pre></details>`:"").join("")}
-function taskHTML(t,taskId){const r=t.request||{};
- const attempts=(t.attempts||[]).map(a=>({...a,transcript:a.transcript.filter(m=>!(m.type=="system"&&m.subtype=="thinking_tokens"))}));
- return `<details><summary>输入：上下文</summary>${J(r.context)}</details><details><summary>技能 (${(r.skills||[]).length})</summary>${(r.skills||[]).map(s=>`<details><summary>${s.id}</summary><pre>${esc(s.instructions)}</pre></details>`).join("")}</details>`+
- attempts.map(a=>`<details ${attemptAttrs(taskId,a.name,a===attempts.at(-1))}><summary>agent 过程 · ${a.name} (${a.transcript.length} 条)</summary>${a.feedback?.error?`<div class=warn>上次被拒原因：${esc(a.feedback.error)}</div>`:""}${a.transcript.map(step).join("")||"<span class=mute>尚无输出</span>"}${Object.keys(a.failed).length?`<details><summary class=bad>失败的回复</summary>${J(a.failed)}</details>`:""}</details>`).join("")+
- (Object.keys(t.rejected||{}).length?`<details><summary class=bad>被拒绝的提交 (${Object.keys(t.rejected).length})</summary>${J(t.rejected)}</details>`:"")+
- (t.artifact?`<details open><summary class=ok>输出（已验收）</summary>${J(t.artifact)}</details>`:t.response?`<details open><summary>输出（待验收）</summary>${J(t.response)}</details>`:"<div class=mute>尚无输出</div>")}
-async function tick(){if($("#live").checked){try{await refresh();for(const id in S.open)S.open[id]=await get(`/api/task?run=${S.run}&task=${id}`);if(S.tab=="tasks")render()}catch(e){}}setTimeout(tick,3000)}
-refresh().then(()=>setTimeout(tick,3000));
-</script></body></html>
+const $=s=>document.querySelector(s),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tabs={overview:'研究概览',pool:'对话池',tasks:'任务与 Agent',claims:'主张与谱系',evidence:'证据与六维评分',runs:'实验运行',draft:'论文草稿',experts:'专家',domain:'领域图谱',errors:'错误',events:'时间线'};
+const labels={knowledge:'知识准备',scope:'范围',corpus:'文献库',reading:'阅读卡',domain:'领域理解',selection:'选队',paper:'论文专家',consultant:'临时专家',expert_review:'专家审核',propose:'独立提案',exchange:'交叉意见',revise:'作者修订',triage:'去重',merge:'合并',assess:'可检验性评估',select:'实验组合',build_testbed:'评测底座',protocol_review:'协议审核',build:'实现方法',implementation_review:'实现审核',judge:'结果判定',explain:'解释结果',evolve:'修订进化',novelty:'查新',ablation_plan:'消融计划',freeze:'冻结',write:'写作',peer_review:'论文评审',meta_review:'综合评审',completed:'完成',running:'运行中',pending:'待处理',awaiting_workers:'等待任务',awaiting_execution:'等待实验授权',awaiting_confirmation:'等待确认',needs_evidence:'需要证据',failed:'失败',supported:'有证据支持',refuted:'被反驳',inconclusive:'尚不确定',untested:'未验证',unverifiable_with_resources:'当前资源无法验证',budget_exhausted:'预算内未完成',impl_failed:'实现失败',protocol_failed:'协议无效',screen:'开发子集',confirm:'开发全集',test:'最终测试'};
+Object.assign(labels,{testbed_plan:'底座设计',write_section:'专家章节',rebuttal:'评审回应',final_judgment:'最终结果判读',paused:'已暂停',ready:'就绪',needs_human:'需要处理',needs_materials:'需要材料',needs_latex:'等待编译环境',ready_for_experiment:'等待执行实验',needs_protocol_revision:'需要修订协议',testbed:'评测底座',final_test:'最终测试',finalize:'定稿',compile:'编译',draft:'论文草稿',outline:'写作提纲',compilation:'编译结果',frozen:'冻结记录',phase:'阶段',status:'状态',reason:'原因',summary:'摘要',comments:'意见',metrics:'指标',budget:'预算',checkpoints:'检查点',parents:'来源版本',evidence_ids:'证据编号',problem_value:'问题价值',novelty:'新颖性',mechanism_soundness:'机制合理性',evidence_quality:'证据质量',experimental_discriminability:'实验判别力',feasibility:'实施可行性'});
+let runId=localStorage.getItem('pa-run')||'',tab=localStorage.getItem('pa-tab')||'overview',state={},pool=[],events=[],errors=[],busy=false,selectedTask='',detail=null,preview=null,folds=new Map(),scrolls=new Map(),pageSize=200,lastRender='';
+if(!(tab in tabs))tab='overview';
+const label=x=>labels[x]||x||'—',fmt=x=>{if(!x)return '—';const d=new Date(x);return isNaN(d)?esc(x):new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'short',timeStyle:'medium',hour12:false}).format(d)},pill=x=>`<span class="pill badge-${esc(x)}">${esc(label(x))}</span>`;
+async function api(path,args={}){const q=new URLSearchParams({...args,...(runId?{run:runId}:{})});const r=await fetch('/api/'+path+'?'+q);const value=await r.json();if(!r.ok)throw Error(value.error||r.status);return value}
+function json(v,key='root',depth=0){if(v==null)return '<span class="hint">—</span>';if(typeof v!=='object')return typeof v==='string'&&v.startsWith('/')?`<button data-file="${esc(v)}" title="查看本地产物">${esc(v)}</button>`:`<span>${esc(v)}</span>`;if(depth>5)return `<pre data-scroll-key="${esc(key)}">${esc(JSON.stringify(v,null,2))}</pre>`;return Object.entries(v).map(([k,x])=>{const id=key+'.'+k;return typeof x==='object'&&x!==null?`<details data-key="${esc(id)}"><summary>${esc(label(k))} ${Array.isArray(x)?`(${x.length})`:''}</summary><div>${json(x,id,depth+1)}</div></details>`:`<div class="kv"><span>${esc(label(k))}</span><div>${json(x,id,depth+1)}</div></div>`}).join('')}
+function card(title,body,meta='',id=''){return `<article class="card" data-card="${esc(id)}"><h3>${esc(title)}</h3>${meta?`<div class="meta">${meta}</div>`:''}${body}</article>`}
+function objects(data,key,render){return Object.entries(data||{}).map(([id,x])=>render(id,x)).join('')||'<div class="empty">此阶段尚无产物</div>'}
+function graph(nodes,edges){if(!nodes.length)return '<div class="empty">尚无图谱</div>';const width=1000,h=Math.max(160,Math.ceil(nodes.length/4)*120),positions=Object.fromEntries(nodes.map((n,i)=>[n.id,{x:130+(i%4)*245,y:60+Math.floor(i/4)*120}]));return `<svg viewBox="0 0 ${width} ${h}" role="img" aria-label="关系图">${edges.filter(e=>positions[e[0]]&&positions[e[1]]).map(([a,b])=>`<line x1="${positions[a].x}" y1="${positions[a].y}" x2="${positions[b].x}" y2="${positions[b].y}" stroke="#bccdbd"/>`).join('')}${nodes.map(n=>`<g><circle cx="${positions[n.id].x}" cy="${positions[n.id].y}" r="17" fill="#c8ded0"/><title>${esc(n.title||n.id)}</title><text x="${positions[n.id].x}" y="${positions[n.id].y+35}" text-anchor="middle">${esc(String(n.title||n.id).slice(0,28))}</text></g>`).join('')}</svg>`}
+function transcript(attempt){const entries=attempt.transcript||[];return `<details data-key="log-${esc(attempt.name)}"><summary>Agent 过程 · ${esc(attempt.name)} · ${entries.length} 条有效记录</summary>${entries.slice(-pageSize).map(e=>`<div class="log-item"><details data-key="line-${esc(attempt.name)}-${e.log_line}"><summary>${e.log_line} · ${esc(e.type||'记录')} ${esc(e.message?.content?.find?.(b=>b.type==='tool_use')?.name||'')}</summary>${json(e,'log.'+attempt.name+'.'+e.log_line)}</details></div>`).join('')}${entries.length>pageSize?'<button data-action="more">显示更多历史记录</button>':''}</details>`}
+function render(){const signature=JSON.stringify([tab,state,pool,events,errors,selectedTask,detail,pageSize,preview]);if(signature===lastRender){filter();return}lastRender=signature;document.querySelectorAll('details[data-key]').forEach(d=>folds.set(d.dataset.key,d.open));document.querySelectorAll('[data-scroll-key]').forEach(e=>scrolls.set(e.dataset.scrollKey,[e.scrollLeft,e.scrollTop]));const scroll=window.scrollY;$('#heading').textContent=tabs[tab];$('#nav').innerHTML=Object.entries(tabs).map(([k,v])=>`<button data-tab="${k}" class="${tab===k?'active':''}">${v}</button>`).join('')+`<small>方向轮 ${state.outer_round??0} · 构思轮 ${state.cycle??0}</small>`;
+let html='';if(tab==='overview'){html=`<div class="grid">${[['任务',Object.keys(state.tasks||{}).length],['主张版本',Object.keys(state.claims||{}).length],['证据',Object.keys(state.evidence||{}).length],['实验记录',Object.keys(state.runs||{}).length]].map(([k,v])=>card(k,`<div class="number">${v}</div>`)).join('')}</div>`+card('当前进展',json({phase:label(state.phase),status:label(state.status),reason:state.reason||'',budget:state.budget||state.usage||{},checkpoints:state.checkpoints||{}}))+card('研究范围',json(state.knowledge?.scope||{},'scope'));}
+if(tab==='pool')html=pool.map((p,i)=>card(label(p.stage),json(p.output,'pool.'+p.task_id),`${esc(p.subject||p.role)} · ${fmt(p.timestamp)}`,i)).join('');
+if(tab==='tasks'){html=objects(state.tasks,'task',(id,t)=>card(id,`<button data-task="${esc(id)}">${selectedTask===id?'收起详情':'查看输入、输出与过程'}</button>${selectedTask===id&&detail?`<details data-key="request-${esc(id)}"><summary>输入与技能</summary>${json(detail.request,'request.'+id)}</details><details open data-key="response-${esc(id)}"><summary>输出</summary>${json(detail.response,'response.'+id)}</details>${(detail.attempts||[]).map(transcript).join('')}`:''}`,`${pill(t.status)} ${esc(label(t.stage))} · ${esc(t.subject||t.role||'')} · ${fmt(t.completed_at||t.started_at)}`,id));}
+if(tab==='claims'){const claims=state.claims||{};html=card('主张谱系',graph(Object.entries(claims).map(([id,c])=>({id,title:id})),Object.entries(claims).flatMap(([id,c])=>(c.parents||[]).map(p=>[p,id]))));html+=objects(claims,'claim',(id,c)=>card(id,json(c,'claim.'+id),`${pill(c.verdict)} ${pill(c.stage)} ${esc(c.owner)}`,id));}
+if(tab==='evidence')html=objects(state.evidence,'evidence',(id,e)=>card(id,json(e,'evidence.'+id),`${pill(e.kind)} ${esc(e.claim_ref)}`,id));
+if(tab==='runs')html=objects(state.runs,'run',(id,r)=>card(id,json(r,'run.'+id),`${pill(r.outcome)} ${pill(r.split)} · seed ${esc(r.seed)} · ${esc(r.claim_ref)}`,id));
+if(tab==='draft'){html=card('写作提纲、草稿与冻结记录',json({outline:state.outline||{},draft:state.draft||{},compilation:state.compilation||{},frozen:state.frozen||{}},'paper'));if(state.draft?.main)html+=`<button data-file="${esc(state.draft.main)}">查看 LaTeX 主文件</button>`;}
+if(tab==='experts')html=(state.experts||[]).map(e=>card(e.expert_id,json(e,'expert.'+e.expert_id),pill(e.role))).join('');
+if(tab==='domain'){const d=state.knowledge?.domain||{};const routes=d.routes||d.problem_coverage||d.open_questions||[];html=card('问题与方法路线',Array.isArray(routes)?graph(routes.map((r,i)=>({id:String(i),title:r.question||r.name||r.route||String(r)})),[]):'')+card('领域全景',json(d,'domain'))+card('文献与阅读覆盖',json({papers:state.knowledge?.corpus?.papers||[],readings:state.knowledge?.readings||{}},'literature'));}
+if(tab==='errors')html=errors.map((e,i)=>`<article class="card error">${json(e,'error.'+i)}</article>`).join('');
+if(tab==='events')html=events.slice().reverse().map((e,i)=>`<article class="card"><div class="event"><span>${fmt(e.timestamp||e.time||e.at)}</span><div><strong>${esc(e.kind||e.event)}</strong>${json(e,'event.'+i)}</div></div></article>`).join('');
+if(preview?.tab===tab)html+=card(preview.path,`<pre data-scroll-key="preview-${esc(preview.path)}">${esc(preview.text)}</pre>`);$('#content').innerHTML=html||'<div class="empty">尚无记录</div>';document.querySelectorAll('details[data-key]').forEach(d=>{if(folds.has(d.dataset.key))d.open=folds.get(d.dataset.key)});document.querySelectorAll('[data-scroll-key]').forEach(e=>{const p=scrolls.get(e.dataset.scrollKey);if(p){e.scrollLeft=p[0];e.scrollTop=p[1]}});window.scrollTo(0,scroll);filter();}
+function filter(){const q=$('#query').value.toLowerCase();document.querySelectorAll('#content .card').forEach(c=>c.hidden=q&&!c.textContent.toLowerCase().includes(q))}
+async function refresh(){if(busy)return;busy=true;try{const inventory=await api('runs');if(!inventory.runs.length){$('#status').textContent='尚无新版运行';$('#content').innerHTML='<div class="empty">创建并启动一个新版研究运行后，这里会显示完整过程。</div>';return}if(!inventory.runs.some(r=>r.run_id===runId)){runId=inventory.active&&inventory.runs.some(r=>r.run_id===inventory.active)?inventory.active:inventory.runs[0].run_id}$('#runSelect').innerHTML=inventory.runs.map(r=>`<option value="${esc(r.run_id)}" ${r.run_id===runId?'selected':''}>${esc(r.run_id)}</option>`).join('');state=await api('state');[pool,events,errors]=await Promise.all([api('pool'),api('events'),api('errors')]);if(selectedTask&&state.tasks?.[selectedTask])detail=await api('task',{id:selectedTask});$('#status').textContent=label(state.status)+' · '+label(state.phase);$('#notice').textContent='';render();}catch(e){$('#notice').textContent='读取失败：'+e.message;$('#notice').className='card error'}finally{busy=false}}
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.tab){tab=b.dataset.tab;localStorage.setItem('pa-tab',tab);render()}if(b.dataset.task){selectedTask=selectedTask===b.dataset.task?'':b.dataset.task;detail=selectedTask?await api('task',{id:selectedTask}):null;render()}if(b.dataset.action==='more'){pageSize+=300;render()}if(b.dataset.file){const file=await api('file',{path:b.dataset.file});preview={...file,tab};render();}});
+$('#query').addEventListener('input',filter);$('#runSelect').addEventListener('change',()=>{runId=$('#runSelect').value;localStorage.setItem('pa-run',runId);selectedTask='';detail=null;preview=null;folds.clear();scrolls.clear();lastRender='';refresh()});setInterval(()=>{if($('#live').checked)refresh()},4000);refresh();
+</script></html>

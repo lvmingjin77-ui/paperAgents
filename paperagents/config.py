@@ -1,112 +1,130 @@
-"""Project configuration; the scientific brief stays in research.md."""
+"""Scientific questions live in Markdown; execution choices live in TOML."""
 
-from __future__ import annotations
-
-import copy
+from copy import deepcopy
+from pathlib import Path
 import sys
 import tomllib
-from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULTS = {
-    "research": {"lookback_years": 3, "core_papers": 3, "allow_temporary_experts": True},
-    "discussion": {"max_rounds": 2, "max_auto_revisions": 1, "max_evidence_rounds": 2,
-                   "max_candidates_per_expert": 2},
-    "backend": {"kind": "manual", "command": [], "timeout_seconds": 1800},
-    "glm": {"model": "glm-5.2", "fast_model": "glm-5.2",
-            "base_url": "https://open.bigmodel.cn/api/anthropic", "api_key_env": "ZHIPU_API_KEY",
-            "search_mcp_url": "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp", "agent_command": "claude"},
-    "execution": {"max_parallel": 4, "max_worker_attempts": 2,
-                  "experiment_timeout_seconds": 21600, "paper_capabilities": []},
+    "research": {"lookback_years": 3, "core_papers": 2, "allow_temporary_experts": True},
+    "backend": {"kind": "manual", "timeout_seconds": 1800},
+    "glm": {
+        "model": "glm-5.2",
+        "fast_model": "glm-5.2",
+        "base_url": "https://open.bigmodel.cn/api/anthropic",
+        "api_key_env": "ZHIPU_API_KEY",
+        "search_mcp_url": "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp",
+        "agent_command": "claude",
+    },
+    "execution": {
+        "max_worker_attempts": 2,
+        "experiment_timeout_seconds": 3600,
+        "sandbox": "auto",
+    },
+    "resources": {
+        "device": "local",
+        "memory_gb": 16,
+        "gpu": "",
+        "wall_clock_days": 3,
+        "api_budget": 0.0,
+        "api_cost_per_call": 0.0,
+        "max_worker_calls": 200,
+        "python_executable": sys.executable,
+    },
+    "data": {
+        "allowed_sources": [],
+        "download": True,
+        "license_notes": "Use permitted sources; record provenance.",
+    },
+    "loops": {
+        "screen_top_n": 2,
+        "exploratory_slots": 1,
+        "evolve_rounds": 2,
+        "target_good": 2,
+        "engineering_budget": 2,
+        "seeds": [11, 29],
+        "confirm_seeds": [101, 211],
+        "test_seeds": [503],
+        "max_candidates_per_expert": 2,
+        "outer_rounds": 2,
+        "review_rounds": 2,
+        "reviewers": 2,
+    },
+    "output": {"venue": "unspecified", "template": "article", "page_limit": 9, "anonymous": True},
+    "checkpoints": {"testbed": False, "final_method": False, "submission": False},
 }
-DEFAULT_TOML = '''# Scientific goals and constraints belong in research.md.
-[research]
-lookback_years = 3
-# Number of core paper experts (2-5); the domain expert is always added.
-core_papers = 3
-allow_temporary_experts = true
-
-[discussion]
-# Author rebuttal + original-challenger recheck rounds before the novelty audit.
-max_rounds = 2
-# Automatic returns to the authors when synthesis and independent review both ask for revision.
-max_auto_revisions = 1
-# Bounded evidence collection; never executes candidate experiments.
-max_evidence_rounds = 2
-# Short, distinct proposals per expert; details live in referenced files.
-max_candidates_per_expert = 2
-
-[backend]
-# manual: emit isolated worker requests; command: invoke an external agent driver;
-# glm: every worker is Claude Code driven by Zhipu GLM (see [glm]); no other model API is called.
-kind = "manual"
-# An argv array, never a shell string. Placeholders: {request}, {response}, {prompt}.
-command = []
-timeout_seconds = 1800
-
-[glm]
-# Workers run the Claude Code CLI against Zhipu's Anthropic-compatible endpoint.
-# The API key comes from this environment variable or the private .env.glm.json file.
-model = "glm-5.2"
-fast_model = "glm-5.2"
-base_url = "https://open.bigmodel.cn/api/anthropic"
-api_key_env = "ZHIPU_API_KEY"
-search_mcp_url = "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp"
-agent_command = "claude"
-
-[execution]
-max_parallel = 4
-max_worker_attempts = 2
-experiment_timeout_seconds = 21600
-# Optional paper learning: "communication", "method_tools". Core understanding
-# and source-code mapping are always loaded; these abilities remain available.
-paper_capabilities = []
-'''
 
 
-def load_config(project: Path) -> dict:
-    config = copy.deepcopy(DEFAULTS)
-    path = project / "paperagents.toml"
+def toml_template():
+    import json
+
+    lines = [
+        "# Zero api_budget means no currency cap; max_worker_calls always applies.",
+        "# A currency cap requires a conservative api_cost_per_call reservation.",
+    ]
+    for section, fields in DEFAULTS.items():
+        lines += ["", f"[{section}]"]
+        for key, value in fields.items():
+            lines.append(f"{key} = {json.dumps(value, ensure_ascii=False)}")
+    return "\n".join(lines) + "\n"
+
+
+TEMPLATE = toml_template()
+
+
+def load_config(project):
+    config = deepcopy(DEFAULTS)
+    path = Path(project) / "paperagents.toml"
     if path.exists():
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-        for section, settings in raw.items():
-            if section not in config or not isinstance(settings, dict):
-                raise ValueError(f"Unknown or invalid configuration section: {section}")
-            for key, value in settings.items():
+        for section, fields in tomllib.loads(path.read_text()).items():
+            if section not in config or not isinstance(fields, dict):
+                raise ValueError(f"Unknown configuration section: {section}")
+            for key, value in fields.items():
                 if key not in config[section]:
-                    raise ValueError(f"Unknown configuration key: {section}.{key}")
+                    raise ValueError(
+                        f"Unknown configuration key: {section}.{key}; new runs use the 0.2 template"
+                    )
+                expected = type(config[section][key])
+                if not (expected is float and type(value) in (int, float)) and type(value) is not expected:
+                    raise ValueError(f"{section}.{key} must be {expected.__name__}")
                 config[section][key] = value
-    for section, key in [("research", "lookback_years"), ("execution", "max_parallel"),
-                         ("execution", "max_worker_attempts"), ("backend", "timeout_seconds"),
-                         ("execution", "experiment_timeout_seconds")]:
-        value = config[section][key]
-        if type(value) is not int or value <= 0:
-            raise ValueError(f"{section}.{key} must be a positive integer")
-    core = config["research"]["core_papers"]
-    if type(core) is not int or not 2 <= core <= 5:
-        raise ValueError("research.core_papers must be an integer from 2 to 5")
-    discussion = config["discussion"]
-    for name, low, high in (("max_rounds", 1, 5), ("max_auto_revisions", 0, 3),
-                            ("max_evidence_rounds", 0, 5), ("max_candidates_per_expert", 1, 5)):
-        if type(discussion[name]) is not int or not low <= discussion[name] <= high:
-            raise ValueError(f"discussion.{name} must be an integer from {low} to {high}")
-    if type(config["research"]["allow_temporary_experts"]) is not bool:
-        raise ValueError("research.allow_temporary_experts must be a boolean")
-    capabilities = config["execution"]["paper_capabilities"]
-    if not isinstance(capabilities, list) or any(
-        not isinstance(item, str) or item not in {"communication", "method_tools"} for item in capabilities
+    if config["backend"]["kind"] not in {"manual", "glm"}:
+        raise ValueError("backend.kind must be manual or glm")
+    if config["execution"]["sandbox"] not in {"auto", "none"}:
+        raise ValueError("execution.sandbox must be auto or explicit none")
+    for key in (
+        "screen_top_n",
+        "evolve_rounds",
+        "target_good",
+        "max_candidates_per_expert",
+        "outer_rounds",
+        "review_rounds",
+        "reviewers",
     ):
-        raise ValueError("execution.paper_capabilities accepts communication and method_tools only")
-    backend = config["backend"]
-    if backend["kind"] not in {"manual", "command", "glm"}:
-        raise ValueError("backend.kind must be manual, command or glm")
-    if backend["kind"] == "glm":  # a preset of the command backend
-        backend.update(kind="command", driver="glm",
-                       command=[sys.executable, "-m", "paperagents.glm_worker", "{prompt}"])
-    if not isinstance(backend["command"], list) or not all(
-        isinstance(arg, str) and arg for arg in backend["command"]
-    ):
-        raise ValueError("backend.command must be an argv array")
-    if backend["kind"] == "command" and not backend["command"]:
-        raise ValueError("command backend requires backend.command")
+        if config["loops"][key] < 1:
+            raise ValueError(f"loops.{key} must be positive")
+    for key in ("engineering_budget", "exploratory_slots"):
+        if config["loops"][key] < 0:
+            raise ValueError(f"loops.{key} cannot be negative")
+    for key in ("seeds", "confirm_seeds", "test_seeds"):
+        values = config["loops"][key]
+        if not values or any(type(x) is not int for x in values) or len(set(values)) != len(values):
+            raise ValueError(f"loops.{key} must contain distinct integer seeds")
+    if set(config["loops"]["seeds"]) & set(config["loops"]["confirm_seeds"]):
+        raise ValueError("Confirmation uses new seeds")
+    for section, key in [
+        ("resources", "wall_clock_days"),
+        ("resources", "max_worker_calls"),
+        ("resources", "memory_gb"),
+        ("execution", "max_worker_attempts"),
+        ("execution", "experiment_timeout_seconds"),
+        ("backend", "timeout_seconds"),
+    ]:
+        if config[section][key] <= 0:
+            raise ValueError(f"{section}.{key} must be positive")
+    if config["resources"]["api_budget"] < 0 or config["resources"]["api_cost_per_call"] < 0:
+        raise ValueError("API budget and reservation cannot be negative")
+    if config["resources"]["api_budget"] and not config["resources"]["api_cost_per_call"]:
+        raise ValueError("Set conservative resources.api_cost_per_call to enforce an API currency budget")
     return config

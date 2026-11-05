@@ -24,9 +24,13 @@ def _asset_name(asset_id: str) -> str:
 def find_expert_assets(project: Path, expert_id: str) -> list[str]:
     """Discover local versions by identity only; this is not a reuse approval."""
     root = project / "library" / "experts" / _asset_name(expert_id)
-    return [str(path) for path in sorted(root.glob("*/asset.json"))
-            if path.is_file() and not path.is_symlink()
-            and not any(parent.is_symlink() for parent in path.parents)]
+    return [
+        str(path)
+        for path in sorted(root.glob("*/asset.json"))
+        if path.is_file()
+        and not path.is_symlink()
+        and not any(parent.is_symlink() for parent in path.parents)
+    ]
 
 
 def _write_immutable_text(path: Path, content: str) -> None:
@@ -46,8 +50,10 @@ def _knowledge_views(folder: Path, record: dict) -> list[dict]:
         views["idea-trace.json"] = record["idea_trace"]
     if "reasoning_patterns" in knowledge:
         views["reasoning-patterns.json"] = knowledge["reasoning_patterns"]
-    for field, filename in (("communication_analysis", "communication-analysis.json"),
-                            ("reuse_assessment", "reuse-assessment.json")):
+    for field, filename in (
+        ("communication_analysis", "communication-analysis.json"),
+        ("reuse_assessment", "reuse-assessment.json"),
+    ):
         if field in knowledge:
             views[filename] = knowledge[field]
     if not views:
@@ -60,35 +66,49 @@ def _knowledge_views(folder: Path, record: dict) -> list[dict]:
             raise ValueError("Immutable asset derived contents changed")
         if not path.exists():
             write_json(path, data)
-    lines = [f"# {record['expert_id']} knowledge index", "",
-             "Generated from the submitted asset. Reading coverage, understanding and actual tool "
-             "execution are separate claims; consult the independent review for acceptance.", "",
-             "## Views", ""]
+    lines = [
+        f"# {record['expert_id']} knowledge index",
+        "",
+        "Generated from the submitted asset. Reading coverage, understanding and actual tool "
+        "execution are separate claims; consult the independent review for acceptance.",
+        "",
+        "## Views",
+        "",
+    ]
     lines.extend(f"- [{name}]({name})" for name in views)
     understanding = knowledge.get("paper_understanding", {})
     if understanding:
         lines.extend(["", "## Sources", ""])
         for source in understanding.get("sources", []):
             path = Path(source["path"]) if source.get("path") else None
-            target = ("../" + path.relative_to(folder).as_posix()) if path and path.is_relative_to(folder) else None
+            target = (
+                ("../" + path.relative_to(folder).as_posix())
+                if path and path.is_relative_to(folder)
+                else None
+            )
             location = f"[frozen source]({target})" if target else "unavailable"
             lines.append(f"- {source['source_id']}: {source['kind']}, {source['status']}; {location}")
         lines.extend(["", "## Reading anchors", ""])
         for anchor in understanding.get("navigation", []):
-            lines.append(f"- {anchor['anchor_id']} | {anchor['source_id']} | {anchor['kind']} | "
-                         f"{anchor['locator']} | {anchor['summary']}")
+            lines.append(
+                f"- {anchor['anchor_id']} | {anchor['source_id']} | {anchor['kind']} | "
+                f"{anchor['locator']} | {anchor['summary']}"
+            )
     patterns = knowledge.get("reasoning_patterns", [])
     if patterns:
         lines.extend(["", "## Reasoning patterns", ""])
         for pattern in patterns:
             lines.append(f"- {pattern['pattern_id']}: {pattern.get('name', pattern.get('label', ''))}")
     _write_immutable_text(directory / "index.md", "\n".join(lines) + "\n")
-    return [{"path": path.relative_to(folder).as_posix(), "sha256": file_hash(path)}
-            for path in sorted(directory / name for name in [*views, "index.md"])]
+    return [
+        {"path": path.relative_to(folder).as_posix(), "sha256": file_hash(path)}
+        for path in sorted(directory / name for name in [*views, "index.md"])
+    ]
 
 
-def freeze_asset(project: Path, kind: str, record: dict, asset_id: str, sources: list[str],
-                 *, structured: bool = False) -> dict:
+def freeze_asset(
+    project: Path, kind: str, record: dict, asset_id: str, sources: list[str], *, structured: bool = False
+) -> dict:
     if "_asset" in record:
         raise ValueError("_asset is coordinator-owned; workers provide original source_paths instead")
     source_files = []
@@ -117,8 +137,13 @@ def freeze_asset(project: Path, kind: str, record: dict, asset_id: str, sources:
                 raise ValueError(f"Unsupported asset entry: {entry}")
             source_files.append((entry, relative, file_hash(entry)))
     manifest = [{"path": relative.as_posix(), "sha256": hash_} for _, relative, hash_ in source_files]
-    version_input = {"record": record, "sources": manifest, "origin_map": origin_map,
-                     "asset_format": 3, "structured": structured}
+    version_input = {
+        "record": record,
+        "sources": manifest,
+        "origin_map": origin_map,
+        "asset_format": 3,
+        "structured": structured,
+    }
     version = digest(version_input)[:24]
     name = _asset_name(asset_id)
     folder = project / "library" / kind / name / version
@@ -141,8 +166,10 @@ def freeze_asset(project: Path, kind: str, record: dict, asset_id: str, sources:
                 raise ValueError("Source changed while snapshotting")
     output = deepcopy(record)
     output["_asset"] = {
-        "path": str(folder.resolve()), "version": version,
-        "files": manifest, "origin_map": origin_map,
+        "path": str(folder.resolve()),
+        "version": version,
+        "files": manifest,
+        "origin_map": origin_map,
     }
     if kind == "papers" and roots:
         output["full_text_path"] = str((folder / roots[0]).resolve())
@@ -163,18 +190,25 @@ def freeze_asset(project: Path, kind: str, record: dict, asset_id: str, sources:
         output["_asset"]["derived_files"] = _knowledge_views(folder, output) if structured else []
     if kind == "experts":
         skill_name = "expert-" + re.sub(r"[^a-z0-9-]", "-", asset_id.lower())[:40] + "-" + version[:8]
-        _write_immutable_text(folder / "SKILL.md",
-            f"---\nname: {skill_name}\ndescription: Consult this versioned expert knowledge asset.\n---\n\n" +
-            ("Start with [the knowledge index](knowledge/index.md); use it to select the relevant "
-             "understanding, idea-trace or reasoning-pattern view and frozen source. Read the full "
-             "relevant source passage and its figure/table context before answering. The views are "
-             "derived from asset.json, which holds the full record.\n\n"
-             if output["_asset"]["derived_files"] else "Read asset.json and the relevant source references. ") +
-            "Distinguish author-stated reasoning, "
+        _write_immutable_text(
+            folder / "SKILL.md",
+            f"---\nname: {skill_name}\ndescription: Consult this versioned expert knowledge asset.\n---\n\n"
+            + (
+                "Start with [the knowledge index](knowledge/index.md); use it to select the relevant "
+                "understanding, idea-trace or reasoning-pattern view and frozen source. Read the full "
+                "relevant source passage and its figure/table context before answering. The views are "
+                "derived from asset.json, which holds the full record.\n\n"
+                if output["_asset"]["derived_files"]
+                else "Read asset.json and the relevant source references. "
+            )
+            + "Distinguish author-stated reasoning, "
             "reconstruction and unknown history. Tool use requires the recorded verification state. "
             "Load the current work skill separately. Independent expert_review is required; storage "
-            "does not certify expertise or scientific correctness.\n")
-        output["_asset"]["derived_files"].append({"path": "SKILL.md", "sha256": file_hash(folder / "SKILL.md")})
+            "does not certify expertise or scientific correctness.\n",
+        )
+        output["_asset"]["derived_files"].append(
+            {"path": "SKILL.md", "sha256": file_hash(folder / "SKILL.md")}
+        )
     asset_file = folder / "asset.json"
     if asset_file.exists() and read_json(asset_file) != output:
         raise ValueError("Immutable asset metadata changed")
@@ -195,8 +229,13 @@ def verify_asset(record: dict) -> None:
     for item in asset["files"] + asset.get("derived_files", []):
         name = item["path"]
         relative = Path(name)
-        if (relative.is_absolute() or ".." in relative.parts or relative.as_posix() != name
-                or name in expected or name in {"", "."}):
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or relative.as_posix() != name
+            or name in expected
+            or name in {"", "."}
+        ):
             raise ValueError("Immutable asset manifest contains an invalid or duplicate path")
         expected[name] = item["sha256"]
     actual = set()

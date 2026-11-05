@@ -1,25 +1,13 @@
-name: ci
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
+name: checks
+on: [push, pull_request]
 jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          enable-cache: true
-      - name: Sync dependencies
-        run: uv sync --frozen
-      - name: Ruff
-        run: uv run ruff check .
-      - name: Mypy
-        run: uv run mypy .
-      - name: Tests
-        run: uv run pytest -q -n auto
+          python-version: '3.11'
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m ruff check paperagents tests
+      - run: python -m pytest -q

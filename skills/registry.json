@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "expert_profiles": {
     "domain": {
       "path": "profiles/domain-expert.md"
@@ -7,182 +7,225 @@
     "paper": {
       "path": "profiles/paper-expert.md"
     },
-    "consultant": {
+    "temporary": {
       "path": "profiles/temporary-expert.md"
     }
   },
   "skills": {
-    "analyze-paper-communication": {
-      "path": "knowledge/analyze-paper-communication/SKILL.md",
-      "roles": [
-        "researcher",
-        "paper",
-        "domain"
-      ]
-    },
-    "reuse-and-update-expert": {
-      "path": "knowledge/reuse-and-update-expert/SKILL.md",
-      "roles": [
-        "researcher",
-        "paper",
-        "domain",
-        "verifier"
-      ]
-    },
-    "revise-hypotheses": {
-      "path": "ideation/revise-hypotheses/SKILL.md",
-      "roles": [
-        "domain",
-        "paper",
-        "consultant",
-        "researcher"
-      ]
-    },
-    "understand-paper": {
-      "path": "knowledge/understand-paper/SKILL.md",
-      "roles": [
-        "researcher",
-        "domain",
-        "paper",
-        "verifier"
-      ]
-    },
-    "distill-reasoning-patterns": {
-      "path": "knowledge/distill-reasoning-patterns/SKILL.md",
-      "roles": [
-        "researcher",
-        "domain",
-        "paper"
-      ]
-    },
     "build-literature-corpus": {
       "path": "knowledge/build-literature-corpus/SKILL.md",
       "roles": [
-        "researcher",
-        "domain"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
-    "trace-paper-ideas": {
-      "path": "knowledge/trace-paper-ideas/SKILL.md",
+    "read-paper-card": {
+      "path": "knowledge/read-paper-card/SKILL.md",
       "roles": [
-        "researcher",
-        "domain",
-        "paper"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "build-domain-expert": {
       "path": "knowledge/build-domain-expert/SKILL.md",
       "roles": [
-        "domain",
-        "researcher",
-        "consultant"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "select-paper-team": {
       "path": "knowledge/select-paper-team/SKILL.md",
       "roles": [
-        "domain",
-        "researcher"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "understand-paper": {
+      "path": "knowledge/understand-paper/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "build-paper-expert": {
       "path": "knowledge/build-paper-expert/SKILL.md",
       "roles": [
-        "paper",
-        "researcher"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "trace-paper-ideas": {
+      "path": "knowledge/trace-paper-ideas/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "distill-reasoning-patterns": {
+      "path": "knowledge/distill-reasoning-patterns/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "analyze-paper-communication": {
+      "path": "knowledge/analyze-paper-communication/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "reuse-and-update-expert": {
+      "path": "knowledge/reuse-and-update-expert/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "verify-expert": {
       "path": "knowledge/verify-expert/SKILL.md",
       "roles": [
-        "verifier",
-        "domain",
-        "paper"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "map-paper-code": {
       "path": "engineering/map-paper-code/SKILL.md",
       "roles": [
+        "expert",
         "engineer",
-        "paper",
-        "researcher"
+        "critic",
+        "reviewer"
       ]
     },
     "build-method-tools": {
       "path": "engineering/build-method-tools/SKILL.md",
       "roles": [
+        "expert",
         "engineer",
-        "paper",
-        "researcher"
+        "critic",
+        "reviewer"
       ]
     },
     "verify-method-tools": {
       "path": "engineering/verify-method-tools/SKILL.md",
       "roles": [
-        "verifier",
+        "expert",
         "engineer",
-        "paper",
-        "researcher"
+        "critic",
+        "reviewer"
+      ]
+    },
+    "build-testbed": {
+      "path": "engineering/build-testbed/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "generate-hypotheses": {
       "path": "ideation/generate-hypotheses/SKILL.md",
       "roles": [
-        "domain",
-        "paper",
-        "researcher",
-        "consultant"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "exchange-ideas": {
+      "path": "ideation/exchange-ideas/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "explain-and-evolve": {
+      "path": "ideation/explain-and-evolve/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "challenge-claims": {
       "path": "ideation/challenge-claims/SKILL.md",
       "roles": [
+        "expert",
+        "engineer",
         "critic",
-        "domain",
-        "paper",
-        "verifier",
-        "consultant"
+        "reviewer"
+      ]
+    },
+    "screen-and-diagnose": {
+      "path": "ideation/screen-and-diagnose/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     },
     "audit-novelty": {
       "path": "ideation/audit-novelty/SKILL.md",
       "roles": [
-        "critic",
-        "domain",
-        "researcher",
-        "verifier"
-      ]
-    },
-    "design-discriminating-experiments": {
-      "path": "ideation/design-discriminating-experiments/SKILL.md",
-      "roles": [
-        "domain",
-        "paper",
+        "expert",
         "engineer",
-        "researcher",
-        "critic"
-      ]
-    },
-    "synthesize-proposal": {
-      "path": "ideation/synthesize-proposal/SKILL.md",
-      "roles": [
-        "researcher",
-        "domain"
-      ]
-    },
-    "review-research": {
-      "path": "review/review-research/SKILL.md",
-      "roles": [
         "critic",
-        "verifier",
-        "domain",
-        "paper"
+        "reviewer"
       ]
     },
-    "moderate-discussion": {
-      "path": "ideation/moderate-discussion/SKILL.md",
+    "plan-ablation": {
+      "path": "ideation/plan-ablation/SKILL.md",
       "roles": [
-        "domain"
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "write-section": {
+      "path": "writing/write-section/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
+      ]
+    },
+    "review-paper": {
+      "path": "review/review-paper/SKILL.md",
+      "roles": [
+        "expert",
+        "engineer",
+        "critic",
+        "reviewer"
       ]
     }
   }
