@@ -1,13 +1,17 @@
 """No API calls: tiny local worker fixtures exercise the OS boundary."""
 
 import json
+import os
 import platform
+import select
 import shutil
+import subprocess
 import sys
+import time
 
 import pytest
 
-from paperagents.providers import execute_command
+from paperagents.providers import _stop_process_group, _worker_boundary, execute_command
 
 
 @pytest.fixture
@@ -58,6 +62,97 @@ Path('response.json').write_text('{{"ok":true}}')
     )
     assert ok, error + (request / "driver.log").read_text()
     assert json.loads((request / "boundary.json").read_text())["enforcement"] == "macos-seatbelt"
+
+
+@MAC
+@pytest.mark.skipif(not shutil.which("claude"), reason="Claude Code CLI integration test")
+def test_claude_bash_uses_private_temp_without_model_calls(worker):
+    """Exercise the installed Bash tool through MCP, with no credentials or network."""
+    request, _, _, config = worker
+    request = request.resolve()
+    command, env, _ = _worker_boundary(config, request, [shutil.which("claude"), "mcp", "serve"])
+    env = {
+        key: value
+        for key, value in env.items()
+        if key
+        in {
+            "PATH",
+            "LANG",
+            "LC_ALL",
+            "SHELL",
+            "HOME",
+            "TMPDIR",
+            "CLAUDE_CODE_TMPDIR",
+            "CLAUDE_CONFIG_DIR",
+            "XDG_CACHE_HOME",
+        }
+    }
+    env.update(DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1")
+    with (request / "worker.sb").open("a") as profile:
+        profile.write("(deny network*)\n")
+    with (request / "mcp.log").open("w") as log:
+        process = subprocess.Popen(
+            command,
+            cwd=request,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=log,
+            text=True,
+            start_new_session=True,
+        )
+
+        def send(message):
+            process.stdin.write(json.dumps({"jsonrpc": "2.0", **message}) + "\n")
+            process.stdin.flush()
+
+        def receive(message_id):
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                remaining = max(0, deadline - time.monotonic())
+                assert select.select([process.stdout], [], [], remaining)[0], "MCP response timed out"
+                line = process.stdout.readline()
+                assert line, (request / "mcp.log").read_text()
+                response = json.loads(line)
+                if response.get("id") == message_id:
+                    assert "error" not in response, response
+                    return response["result"]
+            pytest.fail("MCP response timed out")
+
+        try:
+            send(
+                {
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "paperagents-boundary-test", "version": "1"},
+                    },
+                }
+            )
+            receive(1)
+            send({"method": "notifications/initialized"})
+            send(
+                {
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "Bash",
+                        "arguments": {"command": "printf 'paperagents-bash-ok'", "timeout": 5000},
+                    },
+                }
+            )
+            result = receive(2)
+            assert not result.get("isError"), result
+            output = "\n".join(item.get("text", "") for item in result["content"])
+            assert "paperagents-bash-ok" in output, output
+            # This directory is created by Claude itself before Bash can execute.
+            assert (request / ".runtime" / "tmp" / f"claude-{os.getuid()}").is_dir()
+        finally:
+            _stop_process_group(process)
+            process.stdin.close()
+            process.stdout.close()
 
 
 @MAC

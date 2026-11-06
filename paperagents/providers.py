@@ -64,6 +64,8 @@ def _worker_boundary(config: dict, request_dir: Path, argv: list[str]) -> tuple[
     env.update(
         HOME=str(private / "home"),
         TMPDIR=str(private / "tmp"),
+        # Claude's Bash tool defaults to /tmp even when TMPDIR is set.
+        CLAUDE_CODE_TMPDIR=str(private / "tmp"),
         XDG_CACHE_HOME=str(private / "cache"),
         CLAUDE_CONFIG_DIR=str(private / "claude"),
     )
