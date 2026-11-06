@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -21,7 +22,9 @@ def main(argv: list[str]) -> int:
     if project is None:
         print("glm_worker: cannot find the project's paperagents.toml", file=sys.stderr)
         return 2
-    glm = load_config(project)["glm"]
+    config = load_config(project)
+    glm = config["glm"]
+    python = shlex.quote(config["resources"]["python_executable"] or sys.executable)
     key = os.environ.get(glm["api_key_env"], "").strip()
     private_config = ROOT / ".env.glm.json"
     if not key and private_config.is_file():
@@ -72,6 +75,8 @@ def main(argv: list[str]) -> int:
         f"them into artifacts, source code, commands or logs. {glm['model']} is text-only; record "
         "visual evidence that cannot be verified from extracted text, tables or captions. "
         "Use the current attempt directory or $TMPDIR for temporary files. "
+        f"Use the project's configured Python, {python}, for Python tools and dependency checks. "
+        f"Invoke pip as {python} -m pip; any installation must stay within this task's writable directories. "
         "Follow this task's execution limits; research experiments are run separately by "
         "the coordinator. If an experiment needs model API credentials, declare this "
         "resource requirement without embedding the key in its workspace.\n"
