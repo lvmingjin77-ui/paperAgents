@@ -69,6 +69,7 @@ def main(argv: list[str]) -> int:
         + " at the official BigModel endpoint. Never print credentials or copy "
         f"them into artifacts, source code, commands or logs. {glm['model']} is text-only; record "
         "visual evidence that cannot be verified from extracted text, tables or captions. "
+        "Use the current attempt directory or $TMPDIR for temporary files. "
         "Follow this task's execution limits; research experiments are run separately by "
         "the coordinator. If an experiment needs model API credentials, declare this "
         "resource requirement without embedding the key in its workspace.\n"
