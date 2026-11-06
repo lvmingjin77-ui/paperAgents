@@ -82,12 +82,13 @@ def test_claude_bash_uses_private_temp_without_model_calls(worker):
             "SHELL",
             "HOME",
             "TMPDIR",
+            "TMPPREFIX",
             "CLAUDE_CODE_TMPDIR",
             "CLAUDE_CONFIG_DIR",
             "XDG_CACHE_HOME",
         }
     }
-    env.update(DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1")
+    env.update(SHELL="/bin/zsh", DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1")
     with (request / "worker.sb").open("a") as profile:
         profile.write("(deny network*)\n")
     with (request / "mcp.log").open("w") as log:
@@ -139,7 +140,10 @@ def test_claude_bash_uses_private_temp_without_model_calls(worker):
                     "method": "tools/call",
                     "params": {
                         "name": "Bash",
-                        "arguments": {"command": "printf 'paperagents-bash-ok'", "timeout": 5000},
+                        "arguments": {
+                            "command": "cat <<'EOF'\npaperagents-bash-ok\nEOF",
+                            "timeout": 5000,
+                        },
                     },
                 }
             )
