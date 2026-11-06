@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from paperagents.knowledge import KnowledgeBlocked, REVIEW_CRITERIA, advance_knowledge, request_literature
+from paperagents.knowledge import (
+    KnowledgeBlocked,
+    REVIEW_CRITERIA,
+    advance_knowledge,
+    knowledge_view,
+    request_literature,
+)
 from paperagents.skills import STAGE_SKILLS, resolve_skills
 
 
@@ -220,6 +226,32 @@ def test_interrupted_pipeline_does_not_repeat_completed_reading(tmp_path):
     advance_knowledge(w)
     assert w.calls.count(("reading", "p1")) == 1
     assert len(w.state["experts"]) == 3
+
+
+def test_large_reading_evidence_stays_available_through_domain_and_team_indexes(tmp_path):
+    import json
+
+    w = FakeWorkflow(tmp_path)
+    evidence = "SYNTHETIC_LONG_SOURCE_EVIDENCE " * 5000
+
+    def add_evidence(stage, response):
+        if stage == "reading":
+            response["card"]["limitations"] = [evidence]
+        return response
+
+    w.transform_response = add_evidence
+    advance_knowledge(w)
+    views = [
+        w.contexts[("domain", "domain")],
+        w.contexts[("selection", "team")],
+        w.contexts[("consultant", "domain")],
+        knowledge_view(w.state["knowledge"]),
+    ]
+    for view in views:
+        assert len(json.dumps(view)) < len(evidence) // 10
+        for item in view["reading_index"].values():
+            record = json.loads(Path(item["card_path"]).read_text())
+            assert record["card"]["limitations"] == [evidence]
 
 
 def test_local_source_changes_invalidate_card_cache(tmp_path):

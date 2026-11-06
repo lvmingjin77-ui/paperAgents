@@ -323,6 +323,26 @@ def request_literature(w, questions):
     w.save()
 
 
+def knowledge_view(knowledge):
+    """Keep the research overview in context and link to complete frozen reading cards."""
+    view = {
+        field: knowledge[field]
+        for field in ("scope", "corpus", "domain", "selection", "graph_paths", "pending_questions")
+        if field in knowledge
+    }
+    papers = {p["paper_id"]: p for p in knowledge.get("corpus", {}).get("papers", [])}
+    view["reading_index"] = {
+        pid: {
+            "title": papers[pid]["title"],
+            "methods": [c["method"] for c in record["card"]["contributions"]],
+            "card_path": str(Path(record["_asset"]["path"]) / "asset.json"),
+        }
+        for pid, record in knowledge.get("readings", {}).items()
+        if pid in papers
+    }
+    return view
+
+
 def advance_knowledge(w):
     """Resume K1. Each task and accepted artifact remains available after interruption."""
     outer = w.state.get("outer_round", 1)
@@ -401,6 +421,9 @@ def advance_knowledge(w):
                 {
                     **common,
                     "paper": paper,
+                    "paper_index": {
+                        p: {"title": item["title"], "url": item["url"]} for p, item in papers.items()
+                    },
                     "depth": "breadth card: contribution, mechanism outline, assumptions, "
                     "reported evidence and gaps; no exhaustive appendix/code reading "
                     "or mandatory full reasoning trace",
@@ -421,6 +444,7 @@ def advance_knowledge(w):
     graph = compile_graph(active_cards, {p: v["title"] for p, v in papers.items()})
     k["graph"] = graph
     k["graph_paths"] = write_views(w.run_dir / "knowledge" / "landscape", graph, active_cards)
+    reading_index = knowledge_view(k)["reading_index"]
     k["domain"] = _task(
         w,
         "domain",
@@ -429,9 +453,10 @@ def advance_knowledge(w):
         {
             **common,
             "scope": k["scope"],
-            "cards": active_cards,
-            "graph": graph,
+            "reading_index": reading_index,
+            "graph_paths": k["graph_paths"],
             "instruction": "Compare explanations for each open question; "
+            "Use the reading and graph indexes to inspect evidence across competing routes. "
             "do not assign a bottleneck before discriminating evidence. Distinguish "
             "a corpus gap from a field-wide gap. Request targeted reading for material gaps.",
         },
@@ -448,7 +473,7 @@ def advance_knowledge(w):
             **common,
             "domain": k["domain"],
             "papers": corpus["papers"],
-            "cards": active_cards,
+            "reading_index": reading_index,
             "selection_rule": "Choose method contributions "
             "covering competing solution routes; breadth reading need not be complete. "
             "Prefer recent relevant advances but explain older foundational choices. "
@@ -466,7 +491,7 @@ def advance_knowledge(w):
             "domain",
             "consultant",
             k["domain"]["source_paper_ids"],
-            {"domain": k["domain"], "cards": active_cards},
+            {"domain": k["domain"], "reading_index": reading_index, "graph_paths": k["graph_paths"]},
         )
     ]
     specs += [

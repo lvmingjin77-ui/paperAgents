@@ -63,8 +63,10 @@ def main(argv: list[str]) -> int:
         }
     }
     instructions = (
-        prompt.read_text(encoding="utf-8")
-        + "\nAll generative model API calls must use "
+        f"Read and follow the task instructions in {prompt}. "
+        "Inspect its request file and indexed evidence as directed, reading large files by "
+        "named fields or sections without discarding required material. "
+        "All generative model API calls must use "
         + glm["model"]
         + " at the official BigModel endpoint. Never print credentials or copy "
         f"them into artifacts, source code, commands or logs. {glm['model']} is text-only; record "

@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 import pytest
-from paperagents.workflow import Workflow, initialize_project
+from paperagents.workflow import Pending, Workflow, initialize_project
 from paperagents.storage import write_json, digest
 from paperagents import contracts as C
 from paperagents.state import add_claim, add_evidence, set_verdict
@@ -39,6 +39,41 @@ def workflow(tmp_path):
         seeds=[1, 2], confirm_seeds=[3, 4], test_seeds=[5], evolve_rounds=2, target_good=2
     )
     return w
+
+
+def test_request_preserves_large_context_without_embedding_it_in_prompt(workflow):
+    context = {"evidence": "SYNTHETIC_EVIDENCE_ONLY\n" * 100_000}
+    with pytest.raises(Pending):
+        workflow.task("scope", "large-request", "expert", context, {"type": "object"})
+    task = workflow.state["tasks"][workflow.key("scope", "large-request")]
+    request_path = Path(task["request_path"])
+    request = json.loads(request_path.read_text())
+    prompt = (request_path.parent / "prompt.md").read_text()
+    assert request["context"] == context
+    assert str(request_path) in prompt
+    assert "SYNTHETIC_EVIDENCE_ONLY" not in prompt
+    assert len(prompt.encode()) < 20_000
+
+
+def test_shared_expert_index_preserves_identity_and_links_full_assets(workflow):
+    expert = dict(
+        expert_id="paper-fixture",
+        role="paper",
+        source_paper_ids=["fixture"],
+        knowledge={"mechanism": "SYNTHETIC_FULL_METHOD"},
+        _asset={"path": str(workflow.project / "library/experts/fixture")},
+    )
+    workflow.state["experts"] = [expert, {"expert_id": "domain", "role": "domain"}]
+    context = workflow.context()
+    assert context["experts"][0] == dict(
+        expert_id="paper-fixture",
+        role="paper",
+        source_paper_ids=["fixture"],
+        asset_path=str(Path(expert["_asset"]["path"]) / "asset.json"),
+        skill_path=str(Path(expert["_asset"]["path"]) / "SKILL.md"),
+    )
+    assert context["experts"][1] == {"expert_id": "domain", "role": "domain"}
+    assert workflow.state["experts"][0]["knowledge"] == expert["knowledge"]
 
 
 def install_fake_workers(w, monkeypatch):

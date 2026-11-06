@@ -213,7 +213,11 @@ class Workflow:
                 write_json(request_path, request)
                 prompt = (
                     f"Role: {role}. Stage: {stage}. Subject: {subject}.\n"
-                    f"Read request.json. Write ONLY the requested JSON object to {response_path}.\n"
+                    f"Read {request_path}. Write ONLY the requested JSON object to {response_path}.\n"
+                    "Start with the research question, task instructions and output_schema, then "
+                    "inspect the context index. Read the relevant evidence files and JSON fields "
+                    "as needed; indexed material remains part of the task and must not be ignored "
+                    "or truncated to fit a single read.\n"
                     "Use real sources and record uncertainty. Never invent experiments or scores. "
                     "Do not run research evaluations, model training or candidate methods: the coordinator executes them. "
                     "You may inspect sources; save downloaded literature and notes under context.library_dir when supplied. "
@@ -223,8 +227,6 @@ class Workflow:
                     "Do not alter coordinator state, other task outputs, or approved protocols. "
                     "Peer judgment must be independent; discuss reasons supporting and opposing each mechanism.\n"
                     + "\n\n".join(s["instructions"] for s in skills)
-                    + "\n\nRequest:\n"
-                    + json.dumps(request, ensure_ascii=False, indent=2)
                 )
                 if task.get("error"):
                     prompt += (
@@ -323,9 +325,20 @@ class Workflow:
 
     def context(self):
         # Final-test evidence is never part of the development context.
+        from .knowledge import knowledge_view
+
+        experts = []
+        for expert in self.state["experts"]:
+            entry = {key: expert[key] for key in ("expert_id", "role", "source_paper_ids") if key in expert}
+            if asset := expert.get("_asset"):
+                entry.update(
+                    asset_path=str(Path(asset["path"]) / "asset.json"),
+                    skill_path=str(Path(asset["path"]) / "SKILL.md"),
+                )
+            experts.append(entry)
         return dict(
-            knowledge=self.state["knowledge"],
-            experts=self.state["experts"],
+            knowledge=knowledge_view(self.state["knowledge"]),
+            experts=experts,
             claims=active_claims(self.state),
             evidence={k: v for k, v in self.state["evidence"].items() if v["content"].get("split") != "test"},
             protocol=self.public_protocol(),
