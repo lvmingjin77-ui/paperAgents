@@ -34,7 +34,9 @@ def read_status(project):
         "claims": len(state["claims"]),
         "runs": len(state["runs"]),
         "tasks_completed": sum(t["status"] == "completed" for t in state["tasks"].values()),
-        "pending": [t["task_id"] for t in state["tasks"].values() if t["status"] != "completed"],
+        "pending": [
+            t["task_id"] for t in state["tasks"].values() if t["status"] not in {"completed", "superseded"}
+        ],
     }
 
 

@@ -134,7 +134,11 @@ class Workflow:
             "claims": len(self.state["claims"]),
             "runs": len(self.state["runs"]),
             "tasks_completed": sum(t["status"] == "completed" for t in self.state["tasks"].values()),
-            "pending": [t["task_id"] for t in self.state["tasks"].values() if t["status"] != "completed"],
+            "pending": [
+                t["task_id"]
+                for t in self.state["tasks"].values()
+                if t["status"] not in {"completed", "superseded"}
+            ],
         }
 
     def pause(self, status, reason):
@@ -413,6 +417,9 @@ class Workflow:
         )
         for claim in self.state["claims"].values():
             claim["active"] = False
+        for task in self.state["tasks"].values():
+            if task["status"] != "completed":
+                task["status"] = "superseded"
         self.transition("knowledge")
 
     def run(self, *, execute=False, until=None):
@@ -436,6 +443,9 @@ class Workflow:
             self.event("workflow_error", error=str(exc))
             raise
         except KeyboardInterrupt:
+            for task in self.state["tasks"].values():
+                if task["status"] == "running":
+                    task["status"] = "interrupted"
             self.state.update(
                 status="paused", reason="Interrupted; completed tasks and run receipts are retained"
             )

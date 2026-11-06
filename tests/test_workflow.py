@@ -1,8 +1,10 @@
 """Synthetic research lifecycle fixtures. No model API or scientific experiment is invoked."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 import pytest
+from paperagents.cli import read_status
 from paperagents.workflow import Pending, Workflow, initialize_project
 from paperagents.storage import write_json, digest
 from paperagents import contracts as C
@@ -298,6 +300,88 @@ def test_manual_task_schema_feedback_and_retry(workflow):
     assert workflow.config["execution"]["max_worker_attempts"] == 2
     reloaded = Workflow(workflow.project)
     assert reloaded.run()["status"] == "awaiting_workers"
+
+
+def test_interrupted_worker_resumes_without_repeating_completed_tasks(workflow, monkeypatch):
+    calls = []
+
+    def execute(driver, directory):
+        stage = json.loads((directory / "request.json").read_text())["stage"]
+        calls.append(stage)
+        with (directory / "driver.log").open("a") as stream:
+            stream.write(f"Synthetic {stage} invocation\n")
+        if calls == ["scope", "corpus"]:
+            raise KeyboardInterrupt
+        write_json(directory / "response.json", {"stage": stage})
+        return True, ""
+
+    def knowledge(w):
+        for stage in ("scope", "corpus"):
+            w.task(stage, stage, "expert", {}, {"type": "object"})
+        w.transition("testbed")
+
+    monkeypatch.setattr("paperagents.workflow.execute_command", execute)
+    monkeypatch.setattr(Workflow, "_knowledge", knowledge)
+    workflow.config["backend"]["kind"] = "glm"
+    result = workflow.run(until="testbed")
+    scope, corpus = workflow.state["tasks"].values()
+    completed = deepcopy(scope)
+    request = Path(corpus["request_path"]).read_bytes()
+    response = Path(scope["response_path"]).read_bytes()
+    assert result["status"] == "paused"
+    assert corpus["status"] == "interrupted"
+    assert read_status(workflow.project)["pending"] == [corpus["task_id"]]
+
+    resumed = Workflow(workflow.project)
+    assert resumed.state["tasks"][corpus["task_id"]]["status"] == "interrupted"
+    resumed.config["backend"]["kind"] = "glm"
+    assert resumed.run(until="testbed")["pending"] == []
+    assert calls == ["scope", "corpus", "corpus"]
+    assert resumed.state["tasks"][scope["task_id"]] == completed
+    finished = resumed.state["tasks"][corpus["task_id"]]
+    assert finished["status"] == "completed" and finished["attempt"] == 1
+    assert finished["request_path"] == corpus["request_path"]
+    assert Path(finished["request_path"]).read_bytes() == request
+    assert Path(scope["response_path"]).read_bytes() == response
+    assert (Path(finished["request_path"]).parent / "driver.log").read_text().count("invocation") == 2
+    assert read_status(workflow.project)["pending"] == []
+
+
+def test_reframe_supersedes_unfinished_tasks_without_removing_artifacts(workflow):
+    artifacts = {}
+    for status in ("pending", "running", "failed", "interrupted", "superseded", "completed"):
+        directory = workflow.run_dir / "tasks" / status
+        directory.mkdir(parents=True)
+        for name in ("driver.log", "response.json"):
+            path = directory / name
+            path.write_text(f"Synthetic preserved {status} artifact")
+            artifacts[path] = path.read_bytes()
+        workflow.state["tasks"][status] = dict(task_id=status, status=status)
+    completed = deepcopy(workflow.state["tasks"]["completed"])
+
+    workflow.revise("knowledge", "Synthetic direction revision")
+    assert workflow.state["outer_round"] == 2
+    assert workflow.state["tasks"]["completed"] == completed
+    assert all(
+        t["status"] == "superseded" for key, t in workflow.state["tasks"].items() if key != "completed"
+    )
+    assert all(path.read_bytes() == content for path, content in artifacts.items())
+    assert workflow.summary()["pending"] == read_status(workflow.project)["pending"] == []
+
+    with pytest.raises(Pending):
+        workflow.task("scope", "scope", "expert", {}, {"type": "object"})
+    pending = [workflow.key("scope", "scope")]
+    assert workflow.summary()["pending"] == read_status(workflow.project)["pending"] == pending
+
+
+def test_reframe_budget_stop_keeps_pending_work(workflow):
+    workflow.config["loops"]["outer_rounds"] = 1
+    workflow.state["tasks"]["pending"] = dict(task_id="pending", status="pending")
+    with pytest.raises(Pending):
+        workflow.revise("knowledge", "Synthetic direction revision")
+    assert workflow.state["outer_round"] == 1
+    assert workflow.state["tasks"]["pending"]["status"] == "pending"
+    assert read_status(workflow.project)["pending"] == ["pending"]
 
 
 def test_claim_version_never_inherits_old_evidence(workflow):
