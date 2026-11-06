@@ -179,6 +179,7 @@ def test_breadth_cards_can_select_experts_before_complete_reading(tmp_path):
     assert w.calls.index(("selection", "team")) < w.calls.index(("paper", "expert-p1"))
     assert w.state["knowledge"]["readings"]["p1"]["card"]["coverage"][0]["status"] == "unavailable"
     assert all(e["review"]["accepted"] for e in w.state["experts"])
+    assert all("source_urls" not in e for e in w.state["experts"])
     assert Path(w.state["experts"][0]["_asset"]["path"], "SKILL.md").is_file()
     before = len(w.calls)
     advance_knowledge(w)
@@ -226,6 +227,54 @@ def test_interrupted_pipeline_does_not_repeat_completed_reading(tmp_path):
     advance_knowledge(w)
     assert w.calls.count(("reading", "p1")) == 1
     assert len(w.state["experts"]) == 3
+
+
+@pytest.mark.parametrize("legacy_urls", [False, True])
+def test_expert_source_links_survive_snapshot_and_resume(tmp_path, legacy_urls):
+    from paperagents.assets import verify_asset
+
+    w = FakeWorkflow(tmp_path)
+    local = tmp_path / "source.txt"
+    urls = ["https://example.invalid/paper/", "https://example.invalid/code"]
+
+    def sources(stage, response):
+        if stage in {"paper", "consultant"}:
+            response["source_paths"] = [str(local)] + (urls if legacy_urls else [])
+            if not legacy_urls:
+                response["source_urls"] = urls
+        return response
+
+    w.transform_response = sources
+    with pytest.raises(ValueError, match="Asset source is missing"):
+        advance_knowledge(w)
+    accepted_responses = deepcopy(w.responses)
+    local.write_text("Synthetic source, not scientific evidence.")
+    advance_knowledge(w)
+    assert w.calls.count(("expert_review", "domain")) == 1
+    assert all(w.responses[key] == value for key, value in accepted_responses.items())
+    for expert in w.state["experts"]:
+        assert expert["source_urls"] == urls
+        assert len(expert["source_paths"]) == 1
+        assert Path(expert["source_paths"][0]).read_text() == local.read_text()
+        assert Path(expert["source_paths"][0]).is_relative_to(Path(expert["_asset"]["path"]))
+        verify_asset(expert)
+
+
+def test_expert_with_remote_sources_does_not_claim_local_snapshot(tmp_path):
+    w = FakeWorkflow(tmp_path)
+    url = "https://example.invalid/paper"
+
+    def sources(stage, response):
+        if stage in {"paper", "consultant"}:
+            response["source_paths"] = [url]
+        return response
+
+    w.transform_response = sources
+    advance_knowledge(w)
+    for expert in w.state["experts"]:
+        assert expert["source_paths"] == []
+        assert expert["source_urls"] == [url]
+        assert expert["_asset"]["files"] == []
 
 
 def test_domain_revision_reuses_sources_and_preserves_prior_tasks(tmp_path, monkeypatch):

@@ -156,11 +156,15 @@ EXPERT = obj(
     role={"enum": ["domain", "paper", "temporary"]},
     status=STATUS,
     source_paper_ids=TEXTS,
-    source_paths=TEXTS,
+    source_paths={**TEXTS, "description": "Existing local files or directories to snapshot; no URLs."},
     knowledge=KNOWLEDGE,
     reuse_assessment=TEXT,
     missing_materials=TEXTS,
 )
+EXPERT["properties"]["source_urls"] = {
+    **TEXTS,
+    "description": "Remote source references; links are retained, not downloaded or snapshotted.",
+}
 REVIEW_CRITERIA = ["source_fidelity", "method_understanding", "transfer_limits", "implementation_claims"]
 EXPERT_REVIEW = obj(
     accepted={"type": "boolean"},
@@ -324,7 +328,12 @@ def _save_expert(w, expert, subject):
         _block(w, f"{subject}: " + "; ".join(review["blocking_issues"] or ["expert review rejected"]))
     record = deepcopy(expert)
     record["review"] = review
-    return _frozen_record(w, "experts", record, subject, expert["source_paths"])
+    record["source_paths"] = []
+    # Older accepted responses may mix web references and local source files.
+    for source in expert["source_paths"]:
+        field = "source_urls" if source.lower().startswith(("https://", "http://")) else "source_paths"
+        record.setdefault(field, []).append(source)
+    return _frozen_record(w, "experts", record, subject, record["source_paths"])
 
 
 def _reuse(w, expert_id):
