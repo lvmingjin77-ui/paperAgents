@@ -399,6 +399,8 @@ class Workflow:
             dict(outer_round=self.state["outer_round"], protocol=self.state["protocol"], reason=reason)
         )
         self.state["outer_round"] += 1
+        for field in ("domain_revision", "previous_domain_path"):
+            self.state["knowledge"].pop(field, None)
         self.state.update(
             cycle=0,
             selected=[],
@@ -1094,9 +1096,13 @@ class Workflow:
             raise ValueError(
                 "Holdout was opened. Start a new research run with a fresh independent test set."
             )
-        if phase not in ("knowledge", "testbed", "evolve"):
-            raise ValueError("Revision starts at knowledge, testbed or evolve")
-        if phase in ("knowledge", "testbed"):
+        if phase not in ("knowledge", "domain", "testbed", "evolve"):
+            raise ValueError("Revision starts at knowledge, domain, testbed or evolve")
+        if phase == "domain":
+            from .knowledge import revise_domain
+
+            revise_domain(self, reason)
+        elif phase in ("knowledge", "testbed"):
             self._reframe(reason)
             if phase == "testbed":
                 self.state["phase"] = "testbed"

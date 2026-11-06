@@ -228,6 +228,64 @@ def test_interrupted_pipeline_does_not_repeat_completed_reading(tmp_path):
     assert len(w.state["experts"]) == 3
 
 
+def test_domain_revision_reuses_sources_and_preserves_prior_tasks(tmp_path, monkeypatch):
+    from paperagents.storage import read_json, write_json
+    from paperagents.workflow import Workflow, initialize_project
+
+    fixture = FakeWorkflow(tmp_path / "fixture")
+    project = tmp_path / "project"
+    initialize_project(project, "Synthetic domain revision; no scientific work.")
+    w = Workflow(project)
+    w.config["research"]["core_papers"] = 2
+    w.config["backend"]["kind"] = "glm"
+    w.config["loops"]["outer_rounds"] = 1
+
+    def execute(driver, directory):
+        req = read_json(directory / "request.json")
+        response = fixture.task(
+            req["stage"], req["subject"], req["role"], req["context"], req["output_schema"], req["task_id"]
+        )
+        write_json(directory / "response.json", response)
+        return True, ""
+
+    monkeypatch.setattr("paperagents.workflow.execute_command", execute)
+    advance_knowledge(w)
+    completed = deepcopy(w.state["tasks"])
+    artifacts = {
+        Path(t[field]): Path(t[field]).read_bytes()
+        for t in completed.values()
+        for field in ("request_path", "response_path")
+    }
+    readings = deepcopy(w.state["knowledge"]["readings"])
+    calls = len(fixture.calls)
+    w.state["tasks"]["k1-consultant-unfinished"] = dict(
+        task_id="k1-consultant-unfinished", stage="consultant", status="interrupted"
+    )
+
+    w.revise("domain", "Recheck the decision-relevant source conflict")
+    assert w.state["outer_round"] == 1
+    assert not w.state["experts"]
+    assert "selection" not in w.state["knowledge"]
+    assert "complete_outer_round" not in w.state["knowledge"]
+    assert w.state["tasks"]["k1-consultant-unfinished"]["status"] == "superseded"
+    assert all(w.state["tasks"][key] == task for key, task in completed.items())
+
+    advance_knowledge(w)
+    assert set(stage for stage, _ in fixture.calls[calls:]) == {
+        "domain", "selection", "consultant", "paper", "expert_review"
+    }
+    context = fixture.contexts[("domain", "domain")]
+    assert context["previous_domain_path"] == completed["k1-domain-domain"]["response_path"]
+    assert context["questions_to_add"] == ["Recheck the decision-relevant source conflict"]
+    assert w.state["knowledge"]["readings"] == readings
+    assert all(path.read_bytes() == content for path, content in artifacts.items())
+    assert w.state["tasks"]["k1-d1-domain-domain"]["status"] == "completed"
+    assert len(w.state["experts"]) == 3
+    calls = len(fixture.calls)
+    advance_knowledge(w)
+    assert len(fixture.calls) == calls
+
+
 def test_large_reading_evidence_stays_available_through_domain_and_team_indexes(tmp_path):
     import json
 

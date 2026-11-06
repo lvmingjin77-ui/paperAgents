@@ -348,6 +348,7 @@ def test_interrupted_worker_resumes_without_repeating_completed_tasks(workflow, 
 
 
 def test_reframe_supersedes_unfinished_tasks_without_removing_artifacts(workflow):
+    workflow.state["knowledge"].update(domain_revision=1, previous_domain_path="prior-domain.json")
     artifacts = {}
     for status in ("pending", "running", "failed", "interrupted", "superseded", "completed"):
         directory = workflow.run_dir / "tasks" / status
@@ -361,6 +362,8 @@ def test_reframe_supersedes_unfinished_tasks_without_removing_artifacts(workflow
 
     workflow.revise("knowledge", "Synthetic direction revision")
     assert workflow.state["outer_round"] == 2
+    assert "domain_revision" not in workflow.state["knowledge"]
+    assert "previous_domain_path" not in workflow.state["knowledge"]
     assert workflow.state["tasks"]["completed"] == completed
     assert all(
         t["status"] == "superseded" for key, t in workflow.state["tasks"].items() if key != "completed"
@@ -382,6 +385,15 @@ def test_reframe_budget_stop_keeps_pending_work(workflow):
     assert workflow.state["outer_round"] == 1
     assert workflow.state["tasks"]["pending"]["status"] == "pending"
     assert read_status(workflow.project)["pending"] == ["pending"]
+
+
+@pytest.mark.parametrize("phase,protocol", [("testbed", {}), ("knowledge", {"protocol_id": "frozen"})])
+def test_domain_revision_cannot_bypass_testbed_reconstruction(workflow, phase, protocol):
+    workflow.state.update(phase=phase, protocol=protocol)
+    before = deepcopy(workflow.state)
+    with pytest.raises(ValueError, match="revise from knowledge"):
+        workflow.revise("domain", "A changed premise requires a new evaluation protocol")
+    assert workflow.state == before
 
 
 def test_claim_version_never_inherits_old_evidence(workflow):

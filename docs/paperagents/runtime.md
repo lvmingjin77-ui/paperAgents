@@ -52,7 +52,7 @@ python -m paperagents revise projects/my-research --from evolve --reason '修订
 python -m paperagents research projects/my-research --execute
 ```
 
-入口为 `knowledge`、`testbed`、`evolve`。修改科学输入或数据范围后须新建运行。旧版 `--from domain`、`experiment`、`feedback` 命令不适用于 0.2。
+入口为 `knowledge`、`testbed`、`evolve`。仍在知识阶段时，可用 `--from domain` 定向修订领域全景并重新选队、构建专家，复用文献与阅读，保留旧产物，不消耗方向轮数。评测底座建立后，领域前提改变应使用完整 `knowledge` 修订。修改科学输入或数据范围后须新建运行；旧版 `experiment`、`feedback` 入口不适用于 0.2。
 
 ## 预算与资源
 

@@ -66,7 +66,9 @@ def main(argv=None):
         elif name == "approve":
             p.add_argument("checkpoint", choices=("testbed", "final_method", "submission"))
         elif name == "revise":
-            p.add_argument("--from", dest="phase", required=True, choices=("knowledge", "testbed", "evolve"))
+            p.add_argument(
+                "--from", dest="phase", required=True, choices=("knowledge", "domain", "testbed", "evolve")
+            )
             p.add_argument("--reason", required=True)
         elif name == "web":
             p.add_argument("--port", type=int, default=8766)

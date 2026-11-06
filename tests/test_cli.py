@@ -54,6 +54,7 @@ def test_status_reads_saved_run_even_when_scientific_input_changed(project, caps
         ("submit", ["missing-task", "missing-response.json"]),
         ("approve", ["testbed"]),
         ("revise", ["--from", "evolve", "--reason", "Synthetic revision"]),
+        ("revise", ["--from", "domain", "--reason", "Synthetic source correction"]),
     ],
 )
 def test_control_commands_require_existing_run(project, capsys, command, arguments):

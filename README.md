@@ -40,7 +40,9 @@ python -m paperagents research projects/my-research --execute
 python -m paperagents retry projects/my-research TASK_ID
 # 仅在已启用的检查点暂停时确认，然后恢复
 python -m paperagents approve projects/my-research testbed
-# 科学修订入口：knowledge、testbed 或 evolve
+# 评测底座建立前，只修领域全景和选队，复用文献与阅读
+python -m paperagents revise projects/my-research --from domain --reason '核验影响选队的来源冲突'
+# 完整知识、评测底座或方法修订：knowledge、testbed、evolve
 python -m paperagents revise projects/my-research --from evolve --reason '根据开发集结果修改机制'
 ```
 

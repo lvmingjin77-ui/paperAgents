@@ -205,11 +205,43 @@ def _block(w, reason):
     raise KnowledgeBlocked(reason)
 
 
-def _task(w, stage, subject, role, context, schema, validator=None):
+DOMAIN_STAGES = {"domain", "selection", "consultant", "paper", "expert_review"}
+
+
+def _task_key(w, stage, subject):
     outer = w.state.get("outer_round", 1)
+    revision = w.state.get("knowledge", {}).get("domain_revision", 0)
+    suffix = f"-d{revision}" if revision and stage in DOMAIN_STAGES else ""
+    return f"k{outer}{suffix}-{stage}-{subject}"
+
+
+def _task(w, stage, subject, role, context, schema, validator=None):
     return w.task(
-        stage, subject, role, context, schema, key=f"k{outer}-{stage}-{subject}", validator=validator
+        stage, subject, role, context, schema, key=_task_key(w, stage, subject), validator=validator
     )
+
+
+def revise_domain(w, reason):
+    """Correct the landscape and rebuild its team without repeating source collection."""
+    if w.state["phase"] != "knowledge" or w.state["protocol"]:
+        raise ValueError("Domain revision is only available before testbed; revise from knowledge instead")
+    k = w.state.setdefault("knowledge", {})
+    previous = w.state["tasks"].get(_task_key(w, "domain", "domain"))
+    if previous and previous["status"] == "completed":
+        k["previous_domain_path"] = previous["response_path"]
+    k["domain_revision"] = k.get("domain_revision", 0) + 1
+    k["pending_questions"] = list(dict.fromkeys(k.get("pending_questions", []) + [reason]))
+    for field in ("complete_outer_round", "domain", "selection"):
+        k.pop(field, None)
+    w.state["experts"] = []
+    for task in w.state["tasks"].values():
+        if (
+            task["task_id"].startswith(f"k{w.state['outer_round']}-")
+            and task["stage"] in DOMAIN_STAGES
+            and task["status"] != "completed"
+        ):
+            task["status"] = "superseded"
+    w.event("domain_revision_requested", revision=k["domain_revision"], reason=reason)
 
 
 def _validate_corpus(corpus):
@@ -455,6 +487,7 @@ def advance_knowledge(w):
             "scope": k["scope"],
             "reading_index": reading_index,
             "graph_paths": k["graph_paths"],
+            "previous_domain_path": k.get("previous_domain_path", ""),
             "instruction": "Compare explanations for each open question; "
             "Use the reading and graph indexes to inspect evidence across competing routes. "
             "do not assign a bottleneck before discriminating evidence. Distinguish "
