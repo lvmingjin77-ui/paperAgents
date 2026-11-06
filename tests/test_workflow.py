@@ -442,3 +442,17 @@ def test_real_tex_compile_of_synthetic_manuscript_when_available(workflow, monke
     assert result["status"] == "completed", workflow.state.get("compilation")
     assert Path(workflow.state["compilation"]["pdf"]).read_bytes().startswith(b"%PDF")
     assert workflow.state["compilation"]["audit"]["passed"]
+
+
+def test_supplement_explanations_reach_writing_even_for_prior_claim(workflow, monkeypatch):
+    install_fake_workers(workflow, monkeypatch)
+    workflow.state["experts"] = [{"expert_id": "domain", "role": "domain"}]
+    ref = add_claim(workflow.state, candidate(), "domain", "initial")
+    workflow.state["claims"][ref]["active"] = False
+    workflow.state["selected"] = [ref]
+    workflow._explain_supplement()
+    assert workflow.state["phase"] == "draft"
+    evidence = list(workflow.context()["evidence"].values())
+    assert len(evidence) == 1
+    assert evidence[0]["claim_ref"] == ref
+    assert evidence[0]["content"]["findings"] == ["Fixture evidence"]

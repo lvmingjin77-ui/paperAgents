@@ -393,6 +393,7 @@ class Workflow:
             build_feedback={},
             review_round=0,
             reviews=[],
+            rebuttals=[],
             review_requirements={},
             draft={},
             frozen={},
@@ -926,13 +927,16 @@ class Workflow:
         self.state["promising"] = promising
         self.transition("explain")
 
-    def _explain(self):
+    def _explain_results(self, refs, next_phase):
         for expert in self.state["experts"]:
             eid = expert["expert_id"]
             data = self.task("explain", eid, "expert", self.context() | {"expert": expert}, C.EXPLANATION)
-            for claim in active_claims(self.state):
-                self._evidence("diagnosis", claim["ref"], "explain", eid, data)
-        self.transition("confirm")
+            for ref in refs:
+                self._evidence("diagnosis", ref, "explain", eid, data)
+        self.transition(next_phase)
+
+    def _explain(self):
+        self._explain_results([c["ref"] for c in active_claims(self.state)], "confirm")
 
     def _confirm(self):
         confirmed = []
@@ -1098,6 +1102,7 @@ class Workflow:
                 "previous_draft": self.state.get("draft", {}),
                 "reviews": self.state.get("reviews", []),
                 "review_requirements": self.state.get("review_requirements", {}),
+                "rebuttals": self.state.get("rebuttals", []),
                 "instruction": "Write scientific prose in English. Use versioned claim anchors and metric macros. Include negative and inconclusive results. "
                 "A publishable analysis requires meaningful evidence; failure to beat a baseline alone is insufficient.",
             }
@@ -1200,6 +1205,8 @@ class Workflow:
             if len(set(refs)) != len(refs):
                 raise ValueError("Meta-review claim versions must be distinct")
 
+        self.state["rebuttals"] = rebuttals
+        self.save()
         data = self.task(
             "meta_review",
             f"meta-{self.state.get('review_round', 0)}",
@@ -1242,11 +1249,7 @@ class Workflow:
         self.transition("explain_supplement")
 
     def _explain_supplement(self):
-        for expert in self.state["experts"]:
-            self.task(
-                "explain", expert["expert_id"], "expert", self.context() | {"expert": expert}, C.EXPLANATION
-            )
-        self.transition("draft")
+        self._explain_results(self.state["selected"], "draft")
 
     def _freeze(self):
         from .writing import freeze_snapshot

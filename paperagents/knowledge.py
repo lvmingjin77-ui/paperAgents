@@ -7,6 +7,7 @@ requires exhaustive reading before a paper can be selected for deeper study.
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .assets import file_hash, find_expert_assets, freeze_asset, verify_asset
@@ -332,11 +333,28 @@ def advance_knowledge(w):
     common = {
         "brief": brief,
         "research_config": w.config["research"],
+        "as_of_date": datetime.now(timezone.utc).date().isoformat(),
         "inputs_dir": str(w.project / "inputs"),
         "library_dir": str(w.project / "library"),
         "questions_to_add": k.get("pending_questions", []),
     }
-    k["scope"] = _task(w, "scope", "scope", "expert", common, SCOPE)
+    k["scope"] = _task(
+        w,
+        "scope",
+        "scope",
+        "expert",
+        common
+        | {
+            "instruction": "Plan retrieval from the current research question and open questions. "
+            "Use a rolling lookback_years window ending on as_of_date. "
+            "Existing library assets are source clues, not approved conclusions or a fixed shortlist. "
+            "Cover competing method routes before deciding which explains the bottleneck. "
+            "A method need not report our exact target metric to offer a relevant transferable mechanism. "
+            "Do not select experts, extract reasoning patterns or audit every existing asset in scope; "
+            "those responsibilities belong to later stages.",
+        },
+        SCOPE,
+    )
     w.save()
     corpus = _task(
         w,
