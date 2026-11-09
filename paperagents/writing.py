@@ -63,6 +63,32 @@ def metric_catalog(state: dict) -> list[dict]:
                     "macro": f"\\metric{{{run_id}}}{{{name}}}",
                 }
             )
+    # Unit-bootstrap summaries: \metric{<comparison evidence>}{<baseline>.<metric>.<series>.<est|lo|hi>}
+    for eid, evidence in state.get("evidence", {}).items():
+        if evidence["kind"] != "comparison":
+            continue
+        content = evidence["content"]
+        for baseline, report in content["baselines"].items():
+            for metric, rows in report["unit_bootstrap"].items():
+                for series in ("baseline", "candidate", "improvement"):
+                    estimate, interval = rows[series]
+                    for stat, value in zip(("est", "lo", "hi"), [estimate, *(interval or [None, None])]):
+                        if value is None:
+                            continue
+                        name = f"{baseline}.{metric}.{series}.{stat}"
+                        if not _ID.fullmatch(name):
+                            raise ValueError("Baseline and metric identifiers must be safe LaTeX macro identifiers")
+                        catalog.append(
+                            {
+                                "run_id": eid,
+                                "metric": name,
+                                "value": value,
+                                "claim_ref": evidence["claim_ref"],
+                                "split": content["split"],
+                                "n_units": rows["n_units"],
+                                "macro": f"\\metric{{{eid}}}{{{name}}}",
+                            }
+                        )
     return catalog
 
 
@@ -291,7 +317,8 @@ def update_outline(run_dir: Path, state: dict, config: dict) -> dict:
         )
     lines.extend(["## 开发集测量值", "", "只记录运行器产出的数字；失败运行与封存测试不进入此提纲。", ""])
     lines.extend(
-        f"- `{item['macro']}` = {item['value']:.8g}；主张 `{item['claim_ref'] or 'baseline'}`；seed {item['seed']}"
+        f"- `{item['macro']}` = {item['value']:.8g}；主张 `{item['claim_ref'] or 'baseline'}`；"
+        + (f"seed {item['seed']}" if "seed" in item else f"{item['n_units']} 个统计单位的汇总")
         for item in metrics
     )
     lines.extend(["", "## 待完成论证", "", "作者根据证据撰写段落；独立评审核验论证。未解决项保持开放。", ""])
@@ -342,7 +369,8 @@ def materialize_draft(run_dir: Path, state: dict, content: dict, config: dict) -
         for run_id, metric in _METRIC.findall(tex):
             if (run_id, metric) not in macro_ids:
                 raise ValueError(f"Unknown or invalid result: {run_id}/{metric}")
-            run_ref = state["runs"][run_id].get("claim_ref")
+            source = state["runs"].get(run_id) or state["evidence"][run_id]
+            run_ref = source.get("claim_ref")
             if run_ref and run_ref not in refs:
                 raise ValueError(f"Result {run_id} belongs to an unbound claim version")
         name = f"sections/{index:02d}.tex"

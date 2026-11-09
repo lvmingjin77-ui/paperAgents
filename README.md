@@ -50,7 +50,7 @@ python -m paperagents revise projects/my-research --from evolve --reason '根据
 
 ## 当前边界
 
-- 当前串行调度。
+- 互不依赖的 worker 任务并发执行（`execution.max_parallel`），实验执行串行。
 - API 货币预算使用每次调用的保守预留，不是真实账单；`api_budget = 0` 取消货币上限，调用次数上限仍生效。
 - macOS 使用系统沙箱，Linux 提供 bubblewrap 路径但尚未在本机验证；默认不静默降级为无沙箱。
 - 需要真实数据、模型和可用资源；资源不足会保留缺口，不生成虚构分数。

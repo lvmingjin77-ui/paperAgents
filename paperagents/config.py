@@ -21,6 +21,7 @@ DEFAULTS = {
         "max_worker_attempts": 2,
         "experiment_timeout_seconds": 3600,
         "sandbox": "auto",
+        "max_parallel": 4,
     },
     "resources": {
         "device": "local",
@@ -29,7 +30,7 @@ DEFAULTS = {
         "wall_clock_days": 3,
         "api_budget": 0.0,
         "api_cost_per_call": 0.0,
-        "max_worker_calls": 200,
+        "max_worker_calls": 600,
         "python_executable": sys.executable,
     },
     "data": {
@@ -48,6 +49,7 @@ DEFAULTS = {
         "test_seeds": [503],
         "max_candidates_per_expert": 2,
         "outer_rounds": 2,
+        "literature_rounds": 2,
         "review_rounds": 2,
         "reviewers": 2,
     },
@@ -62,6 +64,7 @@ def toml_template():
     lines = [
         "# Zero api_budget means no currency cap; max_worker_calls always applies.",
         "# A currency cap requires a conservative api_cost_per_call reservation.",
+        "# wall_clock_days counts running time only; pauses and approvals are not charged.",
     ]
     for section, fields in DEFAULTS.items():
         lines += ["", f"[{section}]"]
@@ -104,7 +107,7 @@ def load_config(project):
     ):
         if config["loops"][key] < 1:
             raise ValueError(f"loops.{key} must be positive")
-    for key in ("engineering_budget", "exploratory_slots"):
+    for key in ("engineering_budget", "exploratory_slots", "literature_rounds"):
         if config["loops"][key] < 0:
             raise ValueError(f"loops.{key} cannot be negative")
     for key in ("seeds", "confirm_seeds", "test_seeds"):
@@ -118,6 +121,7 @@ def load_config(project):
         ("resources", "max_worker_calls"),
         ("resources", "memory_gb"),
         ("execution", "max_worker_attempts"),
+        ("execution", "max_parallel"),
         ("execution", "experiment_timeout_seconds"),
         ("backend", "timeout_seconds"),
     ]:

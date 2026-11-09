@@ -112,8 +112,11 @@ def install_fake_workers(w, monkeypatch):
         elif stage == "build_testbed":
             workspace = Path(context["workspace"])
             (workspace / "baseline.json").write_text("1")
-            for split in ("screen", "confirm", "test"):
-                (workspace / f"{split}.json").write_text("{}")
+            units = {split: [f"{split}-a", f"{split}-b"] for split in ("screen", "confirm", "test")}
+            for split in units:
+                (workspace / f"{split}.json").write_text(json.dumps({"units": units[split]}))
+            (workspace / "split_manifest.json").write_text(json.dumps(units))
+            (workspace / "audit.json").write_text(json.dumps([{"item": "SYNTHETIC", "label": "fixture"}]))
             (workspace / "evaluate.py").write_text("""import argparse,json,pathlib
 p=argparse.ArgumentParser()
 for name in ('program','data','seed','output'):p.add_argument('--'+name)
@@ -121,6 +124,8 @@ a=p.parse_args(); out=pathlib.Path(a.output);out.mkdir(exist_ok=True,parents=Tru
 value=float(pathlib.Path(a.program).read_text())
 (out/'metrics.json').write_text(json.dumps({'quality':value}))
 (out/'correct.json').write_text(json.dumps({'correct':True}))
+units=json.loads(pathlib.Path(a.data).read_text())['units']
+(out/'units.json').write_text(json.dumps({u:{'quality':[value,1]} for u in units}))
 """)
             data = dict(
                 status="ready",
@@ -128,7 +133,15 @@ value=float(pathlib.Path(a.program).read_text())
                 protocol=dict(
                     evaluator="evaluate.py",
                     programs={"baseline": "baseline.json"},
+                    baselines=[
+                        dict(name="baseline", source="SYNTHETIC", version="0", supervision="none", compute="none")
+                    ],
                     splits={s: f"{s}.json" for s in ("screen", "confirm", "test")},
+                    statistical_unit="Synthetic unit",
+                    split_manifest="split_manifest.json",
+                    audit_sample="audit.json",
+                    comparison_rules=["Fixture only"],
+                    scope="Engineering fixture",
                     metrics={"quality": {"direction": "max", "description": "Fixture metric"}},
                     data_provenance=["Synthetic fixture"],
                     validity_rules=["Engineering only"],
@@ -137,7 +150,7 @@ value=float(pathlib.Path(a.program).read_text())
                     assets=[],
                 ),
             )
-        elif stage in ("protocol_review", "implementation_review", "ablation_review"):
+        elif stage in ("protocol_review", "implementation_review", "ablation_review", "faithfulness"):
             data = dict(accepted=True, reason="SYNTHETIC review fixture", issues=[])
         elif stage == "propose":
             assert any(e["kind"] == "run" and e["claim_ref"] is None for e in context["evidence"].values())
@@ -167,8 +180,29 @@ value=float(pathlib.Path(a.program).read_text())
                 reason="No protocol changes",
             )
         elif stage == "judge":
+            runs = {r["run_id"] for r in context["runs"]}
+            main = context["purpose"] == "main"
             data = dict(
-                decision="promising", reason="Fixture only", evidence_ids=context["available_evidence_ids"]
+                gate="advance",
+                verdict=("inconclusive" if "-screen" in subject else "supported") if main else "unchanged",
+                prediction_tested="Fixture prediction",
+                reason="Fixture only",
+                evidence_ids=[
+                    eid
+                    for eid, e in w.state["evidence"].items()
+                    if e["kind"] == "run" and e["content"].get("run_id") in runs
+                ],
+            )
+        elif stage == "reassess":
+            data = dict(verdict="unchanged", prediction_tested="Fixture prediction", reason="Fixture", evidence_ids=[])
+        elif stage == "method_spec":
+            data = dict(
+                inputs="SYNTHETIC",
+                outputs="SYNTHETIC",
+                components=[],
+                procedure="Fixture",
+                parameters=[],
+                difference_from_baselines="Fixture",
             )
         elif stage == "explain":
             data = dict(
@@ -177,6 +211,7 @@ value=float(pathlib.Path(a.program).read_text())
                 next_tests=[],
                 reframe=False,
                 literature_gaps=[],
+                claim_refs=[],
             )
         elif stage == "novelty":
             data = dict(decision="distinct", reason="SYNTHETIC only", references=[])
@@ -506,7 +541,7 @@ def test_screen_resume_keeps_original_judgment_bound_to_original_program(workflo
             raise Pending("Second candidate worker paused")
         result = base_task(stage, subject, role, context, schema, **kwargs)
         if stage == "judge" and subject == "fixture@1-screen":
-            result["decision"] = "engineer"
+            result["gate"] = "engineer"
         return result
 
     monkeypatch.setattr(workflow, "task", task)
@@ -552,7 +587,7 @@ def test_deadline_applies_before_first_execution(workflow, monkeypatch):
 
     install_fake_workers(workflow, monkeypatch)
     workflow.run(until="testbed")
-    workflow.state["created_at"] = "2000-01-01T00:00:00+00:00"
+    workflow.state["usage"]["active_seconds"] = 1e12
     workflow.execute = True
     with pytest.raises(Pending):
         workflow._testbed()

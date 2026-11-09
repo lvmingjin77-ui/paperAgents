@@ -1,6 +1,8 @@
 """Local experiment execution and descriptive statistics, independent of any agent framework.
 
-The evaluator interface is ``--program PATH --data PATH --seed INT --output PATH``.
+The evaluator interface is ``--program PATH --data PATH --seed INT --output PATH``. It writes
+``metrics.json``, ``correct.json`` and ``units.json`` ({unit: {metric: [numerator, denominator]}}),
+where a unit is the protocol's independent statistical unit; metrics are ratios of unit sums.
 Only the selected split is staged. Outputs are immutable per invocation and never treated
 as scientific conclusions merely because the process exited successfully.
 """
@@ -13,6 +15,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import random
 import shutil
 import signal
 import statistics
@@ -358,19 +361,25 @@ def run_experiment(
                 metrics={name: values[name] for name in metrics},
                 reason=validity.get("reason", ""),
             )
-            receipt["artifact_refs"] += [str(results / "metrics.json"), str(results / "correct.json")]
+            units = read_json(results / "units.json")
+            for name in metrics:
+                total = [sum(units[u][name][i] for u in units) for i in (0, 1)]
+                if not total[1] or not math.isclose(total[0] / total[1], values[name], rel_tol=1e-9, abs_tol=1e-12):
+                    raise ValueError(f"{name}: metrics.json is not reproduced by units.json unit sums")
+            receipt.update(units_path=str(results / "units.json"), n_units=len(units))
+            receipt["artifact_refs"] += [str(results / p) for p in ("metrics.json", "correct.json", "units.json")]
         elif receipt.get("returncode") is not None:
             receipt["reason"] = "Evaluator process failed; inspect driver.log"
         if tree_hash(stage) != before or tree_hash(workspace) != workspace_hash:
             receipt.update(
                 outcome="protocol_failed", reason="Reviewed experiment inputs changed during execution"
             )
-    except (OSError, ValueError, TypeError) as error:
+    except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
         receipt.update(outcome="protocol_failed", reason=str(error))
     receipt["elapsed_seconds"] = round(time.monotonic() - started, 3)
     receipt["artifact_hashes"] = {
         str(path): tree_hash(path)
-        for path in [output_dir / "driver.log", results / "metrics.json", results / "correct.json"]
+        for path in [output_dir / "driver.log", *(results / p for p in ("metrics.json", "correct.json", "units.json"))]
         if path.is_file()
     }
     write_json(receipt_path, receipt)
@@ -449,46 +458,77 @@ def summarize_runs(runs: list[dict], metrics: dict) -> dict:
             kind: sum(r["outcome"] == kind for r in runs)
             for kind in ("completed", "impl_failed", "protocol_failed", "budget_exhausted")
         },
-        "uncertainty": "95% Student t intervals across independent seeds; not query-level guarantees.",
+        "uncertainty": "Seed spread (algorithmic randomness) only; sample uncertainty is in unit_bootstrap.",
     }
 
 
-def compare_results(baseline_runs: list[dict], candidate_runs: list[dict], metrics: dict) -> dict:
-    """Report metric tradeoffs and paired seed deltas; no claim is automatically accepted."""
+def _unit_table(runs: list[dict], metrics: dict) -> dict:
+    """Average each unit's numerator and denominator over completed seeds."""
+    tables = [read_json(Path(r["units_path"])) for r in runs if r["outcome"] == "completed"]
+    if not tables:
+        return {}
+    units = set(tables[0])
+    if any(set(t) != units for t in tables):
+        raise ValueError("Seeds of one program must report the same statistical units")
+    return {u: {m: [sum(t[u][m][i] for t in tables) / len(tables) for i in (0, 1)] for m in metrics} for u in units}
+
+
+def _ratio(table: dict, units: list, metric: str) -> float | None:
+    den = sum(table[u][metric][1] for u in units)
+    return sum(table[u][metric][0] for u in units) / den if den else None
+
+
+def compare_results(baseline_runs: list[dict], candidate_runs: list[dict], metrics: dict, draws: int = 2000) -> dict:
+    """Paired bootstrap over independent statistical units; no claim is accepted automatically."""
     baseline, candidate = summarize_runs(baseline_runs, metrics), summarize_runs(candidate_runs, metrics)
-    left = {r["seed"]: r for r in baseline_runs if r["outcome"] == "completed"}
-    right = {r["seed"]: r for r in candidate_runs if r["outcome"] == "completed"}
-    pairs = sorted(left.keys() & right.keys())
-    for seed in pairs:
-        if any(
-            left[seed].get(key) != right[seed].get(key) for key in ("protocol_id", "protocol_hash", "split")
-        ):
-            raise ValueError("Baseline and candidate must share the protocol and split")
-    deltas = {}
-    signs = []
+    for left in baseline_runs:
+        for right in candidate_runs:
+            if any(left.get(k) != right.get(k) for k in ("protocol_id", "protocol_hash", "split")):
+                raise ValueError("Baseline and candidate must share the protocol and split")
+    base, cand = _unit_table(baseline_runs, metrics), _unit_table(candidate_runs, metrics)
+    if base and cand and set(base) != set(cand):
+        raise ValueError("Baseline and candidate must report the same statistical units")
+    units = sorted(base) if base and cand else []
+    rng = random.Random(0)
+    samples = [[rng.choice(units) for _ in units] for _ in range(draws)] if units else []
+    bootstrap, signs = {}, []
     for name, spec in metrics.items():
         sign = 1 if spec["direction"] == "max" else -1
-        values = [sign * (right[seed]["metrics"][name] - left[seed]["metrics"][name]) for seed in pairs]
-        deltas[name] = dict(_summary(values), positive_means="candidate improves")
-        if values:
-            tolerance = spec.get("tolerance", 0)
-            mean = statistics.mean(values)
-            signs.append(1 if mean > tolerance else (-1 if mean < -tolerance else 0))
+
+        def interval(fn):
+            values = sorted(v for v in (fn(sample) for sample in samples) if v is not None)
+            return [values[int(0.025 * (len(values) - 1))], values[int(0.975 * (len(values) - 1))]] if values else None
+
+        def improvement(sample):
+            b, c = _ratio(base, sample, name), _ratio(cand, sample, name)
+            return None if b is None or c is None else sign * (c - b)
+
+        if not units:
+            continue
+        ci = interval(improvement)
+        bootstrap[name] = {
+            "baseline": [_ratio(base, units, name), interval(lambda u: _ratio(base, u, name))],
+            "candidate": [_ratio(cand, units, name), interval(lambda u: _ratio(cand, u, name))],
+            "improvement": [improvement(units), ci],
+            "n_units": len(units),
+        }
+        signs.append(0 if ci is None else (1 if ci[0] > 0 else (-1 if ci[1] < 0 else 0)))
     relation = "insufficient_paired_evidence"
-    if len(signs) == len(metrics):
+    if units and len(signs) == len(metrics):
         if all(s >= 0 for s in signs) and any(s > 0 for s in signs):
-            relation = "candidate_dominates_observed_means"
+            relation = "candidate_dominates"
         elif all(s <= 0 for s in signs) and any(s < 0 for s in signs):
-            relation = "baseline_dominates_observed_means"
+            relation = "baseline_dominates"
         elif all(s == 0 for s in signs):
-            relation = "within_declared_tolerance"
+            relation = "no_resolved_difference"
         else:
             relation = "tradeoff"
     return {
         "baseline": baseline,
         "candidate": candidate,
-        "paired_seeds": pairs,
-        "paired_improvement": deltas,
+        "unit_bootstrap": bootstrap,
         "pareto_relation": relation,
+        "uncertainty": "95% percentile intervals from paired resampling of independent statistical units; "
+        "seed spread is reported separately.",
         "decision": "Requires independent critic using protocol thresholds, uncertainty and claim scope.",
     }

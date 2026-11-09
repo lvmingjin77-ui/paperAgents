@@ -98,7 +98,7 @@ TEMP = obj(expert_id=TEXT, specialty=TEXT, reason=TEXT, source_paper_ids=TEXTS)
 SELECTION = obj(
     core_papers=arr(MEMBER),
     temporary_experts=arr(TEMP),
-    coverage=arr(obj(question=TEXT, expert_ids=TEXTS, uncovered=TEXT)),
+    coverage=arr(obj(question=TEXT, expert_ids=TEXTS, method_owner=TEXT, uncovered=TEXT)),
     alternatives=arr(obj(core_paper_ids=TEXTS, temporary_specialties=TEXTS, strengths=TEXTS, gaps=TEXTS)),
     rationale=TEXT,
 )
@@ -215,7 +215,10 @@ DOMAIN_STAGES = {"domain", "selection", "consultant", "paper", "expert_review"}
 def _task_key(w, stage, subject):
     outer = w.state.get("outer_round", 1)
     revision = w.state.get("knowledge", {}).get("domain_revision", 0)
-    suffix = f"-d{revision}" if revision and stage in DOMAIN_STAGES else ""
+    literature = w.state.get("literature_round", 0)
+    suffix = (f"-l{literature}" if literature else "") + (
+        f"-d{revision}" if revision and stage in DOMAIN_STAGES else ""
+    )
     return f"k{outer}{suffix}-{stage}-{subject}"
 
 
@@ -280,6 +283,10 @@ def _validate_selection(selection, papers, research):
     identities = ["domain"] + [m["expert_id"] for m in core + temporary]
     if len(set(identities)) != len(identities):
         raise ValueError("Expert IDs must be distinct, with domain reserved for the domain expert")
+    for route in selection["coverage"]:
+        named = set(route["expert_ids"]) | ({route["method_owner"]} if route["method_owner"] else set())
+        if not named <= set(identities):
+            raise ValueError(f"Coverage of '{route['question']}' names unselected experts: {sorted(named - set(identities))}")
 
 
 def _validate_expert(expert, expert_id, role, source_papers):
@@ -307,11 +314,8 @@ def _frozen_record(w, kind, record, identity, sources=()):
     return freeze_asset(w.project, kind, record, identity, list(sources))
 
 
-def _save_expert(w, expert, subject):
-    if expert["status"] != "ready":
-        _block(w, "; ".join(expert["missing_materials"]) or f"{subject}: missing core method evidence")
-    review = _task(
-        w,
+def _review_spec(w, expert, subject):
+    return (
         "expert_review",
         subject,
         "critic",
@@ -323,7 +327,12 @@ def _save_expert(w, expert, subject):
             "remain unknown unless directly documented. Verify actual source anchors.",
         },
         EXPERT_REVIEW,
+        _task_key(w, "expert_review", subject),
+        None,
     )
+
+
+def _save_expert(w, expert, review, subject):
     if not review["accepted"] or review["blocking_issues"]:
         _block(w, f"{subject}: " + "; ".join(review["blocking_issues"] or ["expert review rejected"]))
     record = deepcopy(expert)
@@ -441,46 +450,53 @@ def advance_knowledge(w):
 
     readings = k.setdefault("readings", {})
     fingerprints = k.setdefault("reading_fingerprints", {})
+    cache_root = w.project / "library" / "reading_cache"
+    index = {p: {"title": item["title"], "url": item["url"]} for p, item in papers.items()}
+    unread = []
     for paper_id, paper in papers.items():
         fingerprint = _paper_fingerprint(paper, w.project)
         if paper_id in readings and fingerprints.get(paper_id) == fingerprint:
             continue
         # Reuse only the exact source metadata cache; a new task gets fresh selection context.
-        cache_root = w.project / "library" / "reading_cache"
         cache = cache_root / f"{fingerprint}.json"
         if cache.is_file():
             record = read_json(cache)
             verify_asset(record)
-            record = deepcopy(record)
-            record["paper_id"] = paper_id
+            readings[paper_id] = dict(deepcopy(record), paper_id=paper_id)
+            fingerprints[paper_id] = fingerprint
         else:
-            record = _task(
-                w,
+            unread.append((paper_id, paper, fingerprint))
+    cards = w.tasks(
+        [
+            (
                 "reading",
                 paper_id,
                 "expert",
                 {
                     **common,
                     "paper": paper,
-                    "paper_index": {
-                        p: {"title": item["title"], "url": item["url"]} for p, item in papers.items()
-                    },
+                    "paper_index": index,
                     "depth": "breadth card: contribution, mechanism outline, assumptions, "
                     "reported evidence and gaps; no exhaustive appendix/code reading "
                     "or mandatory full reasoning trace",
                 },
                 READING,
-                validator=lambda data: _validate_reading(data, paper_id),
+                _task_key(w, "reading", paper_id),
+                lambda data, paper_id=paper_id: _validate_reading(data, paper_id),
             )
-            source = Path(paper["full_text_path"]) if paper["full_text_path"] else None
-            if source and not source.is_absolute():
-                source = w.project / source
-            sources = [str(source)] if source and source.is_file() else []
-            record = _frozen_record(w, "readings", record, fingerprint, sources)
-            write_json(cache, record)
+            for paper_id, paper, _ in unread
+        ]
+    )
+    for (paper_id, paper, fingerprint), card in zip(unread, cards):
+        source = Path(paper["full_text_path"]) if paper["full_text_path"] else None
+        if source and not source.is_absolute():
+            source = w.project / source
+        sources = [str(source)] if source and source.is_file() else []
+        record = _frozen_record(w, "readings", card, fingerprint, sources)
+        write_json(cache_root / f"{fingerprint}.json", record)
         readings[paper_id] = record
         fingerprints[paper_id] = fingerprint
-        w.save()
+    w.save()
     active_cards = {p: readings[p]["card"] for p in papers}
     graph = compile_graph(active_cards, {p: v["title"] for p, v in papers.items()})
     k["graph"] = graph
@@ -564,28 +580,35 @@ def advance_knowledge(w):
         )
         for m in selection["temporary_experts"]
     ]
-    experts = []
-    for expert_id, role, stage, source_papers, context in specs:
-        response = _task(
-            w,
-            stage,
-            expert_id,
-            "expert",
-            {
-                **common,
-                **context,
-                "expert_id": expert_id,
-                "role": role,
-                "source_paper_ids": source_papers,
-                "selection": selection,
-                "reuse_candidates": _reuse(w, expert_id),
-            },
-            EXPERT,
-            validator=lambda data: _validate_expert(data, expert_id, role, source_papers),
-        )
-        experts.append(_save_expert(w, response, expert_id))
-        w.state["experts"] = experts
-        w.save()
+    built = w.tasks(
+        [
+            (
+                stage,
+                expert_id,
+                "expert",
+                {
+                    **common,
+                    **context,
+                    "expert_id": expert_id,
+                    "role": role,
+                    "source_paper_ids": source_papers,
+                    "selection": selection,
+                    "reuse_candidates": _reuse(w, expert_id),
+                },
+                EXPERT,
+                _task_key(w, stage, expert_id),
+                lambda data, e=expert_id, r=role, sp=source_papers: _validate_expert(data, e, r, sp),
+            )
+            for expert_id, role, stage, source_papers, context in specs
+        ]
+    )
+    for (expert_id, *_), expert in zip(specs, built):
+        if expert["status"] != "ready":
+            _block(w, "; ".join(expert["missing_materials"]) or f"{expert_id}: missing core method evidence")
+    reviews = w.tasks([_review_spec(w, expert, spec[0]) for spec, expert in zip(specs, built)])
+    experts = [_save_expert(w, expert, review, spec[0]) for spec, expert, review in zip(specs, built, reviews)]
+    w.state["experts"] = experts
+    w.save()
     k["complete_outer_round"] = outer
     k["pending_questions"] = []
     w.event("knowledge_completed", outer_round=outer, papers=len(papers), experts=len(experts))

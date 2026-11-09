@@ -56,7 +56,7 @@ python -m paperagents research projects/my-research --execute
 
 ## 预算与资源
 
-当前串行调度。配置 `gpu = "mps"` 不代表已验证所有模型可运行，仍取决于实验依赖。
+互不依赖的 worker 任务按 `execution.max_parallel` 并发，实验执行串行；`wall_clock_days` 只计运行时间。评测器须输出 `units.json`，比较按统计单位做配对 bootstrap。配置 `gpu = "mps"` 不代表已验证所有模型可运行，仍取决于实验依赖。
 
 `api_budget` 与 `api_cost_per_call` 使用同一货币单位；协调器每次调用保守预留后者，不读取供应商账单。`api_budget = 0` 表示无货币上限；调用次数与墙钟上限仍生效。
 

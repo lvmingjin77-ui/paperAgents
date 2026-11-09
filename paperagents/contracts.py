@@ -93,11 +93,23 @@ TRIAGE = obj(
 )
 MERGE = obj({"withdraw": TEXTS, "claims": array(CLAIM), "reason": TEXT})
 SELECTION = obj({"claim_refs": TEXTS, "reason": TEXT})
-JUDGMENT = obj(
+VERDICT_UPDATE = {
+    "verdict": enum("supported", "refuted", "inconclusive", "unchanged"),
+    "prediction_tested": TEXT,
+    "reason": TEXT,
+    "evidence_ids": TEXTS,
+}
+# Eligibility (gate) and the scientific verdict on the claim's prediction are separate answers.
+JUDGMENT = obj({"gate": enum("advance", "stop", "engineer"), **VERDICT_UPDATE})
+REASSESSMENT = obj(VERDICT_UPDATE)
+METHOD_SPEC = obj(
     {
-        "decision": enum("promising", "refuted", "inconclusive", "engineer"),
-        "reason": TEXT,
-        "evidence_ids": TEXTS,
+        "inputs": TEXT,
+        "outputs": TEXT,
+        "components": TEXTS,
+        "procedure": TEXT,
+        "parameters": TEXTS,
+        "difference_from_baselines": TEXT,
     }
 )
 EXPLANATION = obj(
@@ -107,6 +119,7 @@ EXPLANATION = obj(
         "next_tests": TEXTS,
         "reframe": BOOL,
         "literature_gaps": TEXTS,
+        "claim_refs": TEXTS,
     }
 )
 NOVELTY = obj({"decision": enum("distinct", "revise", "withdraw"), "reason": TEXT, "references": TEXTS})

@@ -35,6 +35,8 @@ if program.get('missing'): values.pop('far')
 if program.get('tamper'): pathlib.Path(a.program).write_text('{}')
 (o / 'metrics.json').write_text(json.dumps(values))
 (o / 'correct.json').write_text(json.dumps({'correct': not program.get('invalid', False)}))
+units = {u: {name: [value, 1] for name, value in values.items()} for u in data['units']}
+(o / 'units.json').write_text(json.dumps(units))
 """
 
 
@@ -45,9 +47,10 @@ def setup(tmp_path):
     (workspace / "evaluate.py").write_text(EVALUATOR)
     (workspace / "base.json").write_text(json.dumps({"gain": 0.0, "far": 0.1}))
     (workspace / "candidate.json").write_text(json.dumps({"gain": 0.2, "far": 0.05}))
-    (workspace / "screen.json").write_text(json.dumps({"base": 0.5}))
-    (workspace / "confirm.json").write_text(json.dumps({"base": 0.6}))
-    (workspace / "sealed.json").write_text(json.dumps({"base": 0.7, "test": True}))
+    units = ["g1", "g2", "g3"]
+    (workspace / "screen.json").write_text(json.dumps({"base": 0.5, "units": units}))
+    (workspace / "confirm.json").write_text(json.dumps({"base": 0.6, "units": units}))
+    (workspace / "sealed.json").write_text(json.dumps({"base": 0.7, "test": True, "units": units}))
     protocol = {
         "protocol_id": "fixture-v1",
         "evaluator": "evaluate.py",
@@ -82,9 +85,9 @@ def test_valid_receipts_and_paired_comparison(setup, tmp_path, monkeypatch):
         == baselines[0]
     )
     result = compare_results(baselines, candidates, protocol["metrics"])
-    assert result["pareto_relation"] == "candidate_dominates_observed_means"
-    assert result["paired_seeds"] == [1, 2, 3]
-    assert result["paired_improvement"]["accuracy"]["mean"] == pytest.approx(0.2)
+    assert result["pareto_relation"] == "candidate_dominates"
+    assert result["unit_bootstrap"]["accuracy"]["improvement"][0] == pytest.approx(0.2)
+    assert result["unit_bootstrap"]["accuracy"]["n_units"] == 3
     assert result["baseline"]["metrics"]["accuracy"]["ci95"] == [0.5, 0.5]
     stage = tmp_path / "candidate1" / "workspace"
     assert not (stage / "sealed.json").exists()
@@ -106,7 +109,7 @@ def test_protocol_and_program_identity_are_independent_of_other_candidates(setup
     assert first["program_hash"] == second["program_hash"] != candidate["program_hash"]
     assert first["workspace_hash"] != second["workspace_hash"]
     assert summarize_runs([first, second], protocol["metrics"])["completed"] == 2
-    assert compare_results([first], [candidate], protocol["metrics"])["paired_seeds"] == [1]
+    assert compare_results([first], [candidate], protocol["metrics"])["unit_bootstrap"]["far"]["n_units"] == 3
     assert (
         run_experiment(workspace, tmp_path / "base1", baseline_protocol, "baseline", "screen", 1, config)
         == first
@@ -194,11 +197,14 @@ def test_input_validation_and_hashes(setup, tmp_path):
         run_experiment(workspace, tmp_path / "run", protocol, "candidate", "screen", 1, config)
 
 
-def test_uncertainty_and_tradeoffs():
+def test_uncertainty_and_tradeoffs(tmp_path):
     metrics = {"accuracy": {"direction": "max"}, "far": {"direction": "min"}}
 
     def record(seed, program, accuracy, far):
+        units = tmp_path / f"{program}-{seed}.json"
+        units.write_text(json.dumps({u: {"accuracy": [accuracy, 1], "far": [far, 1]} for u in ("u1", "u2")}))
         return {
+            "units_path": str(units),
             "seed": seed,
             "program": program,
             "protocol_id": "test",
