@@ -166,6 +166,9 @@ class View:
             "write_section",
             "rebuttal",
             "final_judgment",
+            "method_spec",
+            "reassess",
+            "faithfulness",
         }
         pool = []
         for task_id, task in state.get("tasks", {}).items():

@@ -28,8 +28,6 @@ DEFAULTS = {
         "memory_gb": 16,
         "gpu": "",
         "wall_clock_days": 3,
-        "api_budget": 0.0,
-        "api_cost_per_call": 0.0,
         "max_worker_calls": 600,
         "python_executable": sys.executable,
     },
@@ -61,11 +59,7 @@ DEFAULTS = {
 def toml_template():
     import json
 
-    lines = [
-        "# Zero api_budget means no currency cap; max_worker_calls always applies.",
-        "# A currency cap requires a conservative api_cost_per_call reservation.",
-        "# wall_clock_days counts running time only; pauses and approvals are not charged.",
-    ]
+    lines = ["# wall_clock_days counts running time only; pauses and approvals are not charged."]
     for section, fields in DEFAULTS.items():
         lines += ["", f"[{section}]"]
         for key, value in fields.items():
@@ -92,43 +86,9 @@ def load_config(project):
                 if not (expected is float and type(value) in (int, float)) and type(value) is not expected:
                     raise ValueError(f"{section}.{key} must be {expected.__name__}")
                 config[section][key] = value
-    if config["backend"]["kind"] not in {"manual", "glm"}:
-        raise ValueError("backend.kind must be manual or glm")
-    if config["execution"]["sandbox"] not in {"auto", "none"}:
-        raise ValueError("execution.sandbox must be auto or explicit none")
-    for key in (
-        "screen_top_n",
-        "evolve_rounds",
-        "target_good",
-        "max_candidates_per_expert",
-        "outer_rounds",
-        "review_rounds",
-        "reviewers",
-    ):
-        if config["loops"][key] < 1:
-            raise ValueError(f"loops.{key} must be positive")
-    for key in ("engineering_budget", "exploratory_slots", "literature_rounds"):
-        if config["loops"][key] < 0:
-            raise ValueError(f"loops.{key} cannot be negative")
-    for key in ("seeds", "confirm_seeds", "test_seeds"):
-        values = config["loops"][key]
-        if not values or any(type(x) is not int for x in values) or len(set(values)) != len(values):
-            raise ValueError(f"loops.{key} must contain distinct integer seeds")
-    if set(config["loops"]["seeds"]) & set(config["loops"]["confirm_seeds"]):
-        raise ValueError("Confirmation uses new seeds")
-    for section, key in [
-        ("resources", "wall_clock_days"),
-        ("resources", "max_worker_calls"),
-        ("resources", "memory_gb"),
-        ("execution", "max_worker_attempts"),
-        ("execution", "max_parallel"),
-        ("execution", "experiment_timeout_seconds"),
-        ("backend", "timeout_seconds"),
-    ]:
-        if config[section][key] <= 0:
-            raise ValueError(f"{section}.{key} must be positive")
-    if config["resources"]["api_budget"] < 0 or config["resources"]["api_cost_per_call"] < 0:
-        raise ValueError("API budget and reservation cannot be negative")
-    if config["resources"]["api_budget"] and not config["resources"]["api_cost_per_call"]:
-        raise ValueError("Set conservative resources.api_cost_per_call to enforce an API currency budget")
+    if config["backend"]["kind"] not in {"manual", "glm"} or config["execution"]["sandbox"] not in {"auto", "none"}:
+        raise ValueError("backend.kind is manual or glm; execution.sandbox is auto or none")
+    loops = config["loops"]
+    if set(loops["seeds"]) & set(loops["confirm_seeds"]):
+        raise ValueError("Confirmation uses new seeds, distinct from screening seeds")
     return config

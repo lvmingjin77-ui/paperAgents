@@ -136,3 +136,58 @@ MANUSCRIPT = obj(
     },
     required=["title", "sections", "references"],
 )
+
+TESTBED_PLAN = obj(
+    {"design": TEXT, "baselines": TEXTS, "validity_checks": TEXTS, "diagnostics": TEXTS, "unresolved": TEXTS}
+)
+METRIC = obj({"direction": enum("min", "max"), "description": TEXT})
+BASELINE = obj({"name": TEXT, "source": TEXT, "version": TEXT, "supervision": TEXT, "compute": TEXT})
+PROTOCOL = obj(
+    {
+        "evaluator": TEXT,
+        "programs": {
+            "type": "object",
+            "properties": {"baseline": TEXT},
+            "required": ["baseline"],
+            "additionalProperties": TEXT,
+            "propertyNames": {"pattern": "^[A-Za-z0-9_-]+$"},
+        },
+        "baselines": array(BASELINE, 1),
+        "splits": obj({"screen": TEXT, "confirm": TEXT, "test": TEXT}),
+        "statistical_unit": TEXT,
+        "split_manifest": TEXT,
+        "audit_sample": TEXT,
+        "metrics": {"type": "object", "minProperties": 1, "additionalProperties": METRIC},
+        "comparison_rules": TEXTS,
+        "scope": TEXT,
+        "data_provenance": TEXTS,
+        "validity_rules": TEXTS,
+        "diagnostic_observations": TEXTS,
+        "unknowns": TEXTS,
+        "assets": TEXTS,
+    }
+)
+TESTBED = obj(
+    {
+        "status": enum("ready", "needs_materials"),
+        "reason": TEXT,
+        "protocol": {"anyOf": [PROTOCOL, {"type": "null"}]},
+    }
+)
+TESTBED["allOf"] = [{"if": {"properties": {"status": {"const": "ready"}}}, "then": {"properties": {"protocol": PROTOCOL}}}]
+BUILD = obj({"program": TEXT, "changes": TEXT, "protocol_changes": BOOL, "reason": TEXT})
+ABLATION_PLAN = obj({"variants": array(obj({"id": TEXT, "change": TEXT, "prediction": TEXT}), 1)})
+DECISION = enum("accept", "revise", "experiments", "reframe")
+PEER_REVIEW = obj(
+    {"decision": DECISION, "reason": TEXT, "dimensions": SCORES, "required_experiments": TEXTS, "claim_refs": TEXTS}
+)
+META_REVIEW = obj({"decision": DECISION, "reason": TEXT, "claim_refs": TEXTS, "required_experiments": TEXTS})
+REBUTTAL = obj({"response": TEXT, "evidence_ids": TEXTS, "required_experiments": TEXTS})
+FINAL_JUDGMENT = obj(
+    {
+        "verdicts": array(
+            obj({"claim_ref": TEXT, "verdict": enum("supported", "refuted", "inconclusive"), "reason": TEXT})
+        )
+    }
+)
+

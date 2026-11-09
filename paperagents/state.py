@@ -31,7 +31,7 @@ def new_state(run_id, inputs):
         confirmed=[],
         approvals=[],
         history=[],
-        usage={"worker_calls": 0, "reserved_cost": 0.0},
+        usage={"worker_calls": 0, "active_seconds": 0.0},
         reason="",
     )
 

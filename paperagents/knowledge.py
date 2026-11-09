@@ -10,7 +10,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .assets import file_hash, find_expert_assets, freeze_asset, verify_asset
+from .assets import file_hash, find_expert_assets, save_asset
 from .landscape import compile_graph, write_views
 from .storage import digest, read_json, write_json
 
@@ -294,6 +294,9 @@ def _validate_expert(expert, expert_id, role, source_papers):
         raise ValueError(f"Expert identity must be {expert_id}")
     if expert["role"] != role or set(expert["source_paper_ids"]) != set(source_papers):
         raise ValueError(f"Expert {expert_id} must retain its assigned role and source papers")
+    missing = [path for path in expert["source_paths"] if not Path(path).exists()]
+    if missing:
+        raise ValueError(f"source_paths must be existing local files (links go in source_urls): {missing}")
 
 
 def _brief(w):
@@ -311,7 +314,7 @@ def _paper_fingerprint(paper, project):
 
 
 def _frozen_record(w, kind, record, identity, sources=()):
-    return freeze_asset(w.project, kind, record, identity, list(sources))
+    return save_asset(w.project, kind, record, identity, list(sources))
 
 
 def _review_spec(w, expert, subject):
@@ -335,21 +338,13 @@ def _review_spec(w, expert, subject):
 def _save_expert(w, expert, review, subject):
     if not review["accepted"] or review["blocking_issues"]:
         _block(w, f"{subject}: " + "; ".join(review["blocking_issues"] or ["expert review rejected"]))
-    record = deepcopy(expert)
-    record["review"] = review
-    record["source_paths"] = []
-    # Older accepted responses may mix web references and local source files.
-    for source in expert["source_paths"]:
-        field = "source_urls" if source.lower().startswith(("https://", "http://")) else "source_paths"
-        record.setdefault(field, []).append(source)
-    return _frozen_record(w, "experts", record, subject, record["source_paths"])
+    return _frozen_record(w, "experts", dict(expert, review=review), subject, expert["source_paths"])
 
 
 def _reuse(w, expert_id):
     candidates = []
     for path in find_expert_assets(w.project, expert_id):
         record = read_json(Path(path))
-        verify_asset(record)
         if record.get("review", {}).get("accepted"):
             candidates.append(
                 {
@@ -461,7 +456,6 @@ def advance_knowledge(w):
         cache = cache_root / f"{fingerprint}.json"
         if cache.is_file():
             record = read_json(cache)
-            verify_asset(record)
             readings[paper_id] = dict(deepcopy(record), paper_id=paper_id)
             fingerprints[paper_id] = fingerprint
         else:
