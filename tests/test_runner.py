@@ -35,7 +35,9 @@ if program.get('missing'): values.pop('far')
 if program.get('tamper'): pathlib.Path(a.program).write_text('{}')
 (o / 'metrics.json').write_text(json.dumps(values))
 (o / 'correct.json').write_text(json.dumps({'correct': not program.get('invalid', False)}))
-units = {u: {name: [value, 1] for name, value in values.items()} for u in data['units']}
+# Per-unit spread proportional to the program's gain keeps the mean equal to metrics.json.
+spread = [program['gain'] * (i - 1) * 0.1 for i in range(len(data['units']))]
+units = {u: {k: [v + d, 1] for k, v in values.items()} for u, d in zip(data['units'], spread)}
 (o / 'units.json').write_text(json.dumps(units))
 """
 
@@ -202,7 +204,8 @@ def test_uncertainty_and_tradeoffs(tmp_path):
 
     def record(seed, program, accuracy, far):
         units = tmp_path / f"{program}-{seed}.json"
-        units.write_text(json.dumps({u: {"accuracy": [accuracy, 1], "far": [far, 1]} for u in ("u1", "u2")}))
+        scaled = {"u1": 0.9, "u2": 1.1}  # unit heterogeneity; the mean stays at the given value
+        units.write_text(json.dumps({u: {"accuracy": [accuracy * w, 1], "far": [far * w, 1]} for u, w in scaled.items()}))
         return {
             "units_path": str(units),
             "seed": seed,

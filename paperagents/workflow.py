@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -173,14 +174,20 @@ class Workflow:
                 "budget_exhausted", "Wall-clock budget reached; increase resources.wall_clock_days to resume"
             )
 
-    def _budget(self):
+    def _over_budget(self):
         r = self.config["resources"]
         usage = self.state["usage"]
-        self._deadline()
+        if self._active_seconds() > r["wall_clock_days"] * 86400:
+            return "Wall-clock budget reached; increase resources.wall_clock_days to resume"
         if usage["worker_calls"] >= r["max_worker_calls"]:
-            self.pause("budget_exhausted", "Worker-call budget reached")
+            return "Worker-call budget reached"
         if r["api_budget"] and usage["reserved_cost"] + r["api_cost_per_call"] > r["api_budget"]:
-            self.pause("budget_exhausted", "API reservation budget reached")
+            return "API reservation budget reached"
+        return None
+
+    def _budget(self):
+        if reason := self._over_budget():
+            self.pause("budget_exhausted", reason)
 
     def _attempt_limit(self, task):
         return max(self.config["execution"]["max_worker_attempts"], task.get("retry_allowance", 0))
@@ -306,31 +313,51 @@ class Workflow:
             return data
         self.pause("awaiting_retry", f"{task_id}: {task.get('error', 'attempt limit')}")
 
-    def tasks(self, specs):
-        """Run independent workers concurrently, then accept each response through task().
+    def _prefetch(self, specs):
+        """Run the workers of independent tasks concurrently; acceptance stays with task().
 
-        A spec is (stage, subject, role, context, schema, key, validator). Only worker
-        processes run in parallel; state changes and validation stay in this thread.
+        A spec is (stage, subject, role, context, schema, key, validator). Only calls the
+        budget can pay for are started, so a batch never charges for work it does not run.
         """
         workers = self.config["execution"]["max_parallel"]
-        if self.config["backend"]["kind"] != "manual" and workers > 1:
-            batch = []
-            for stage, subject, role, context, schema, key, _ in specs:
-                task_id = key or self.key(stage, subject)
-                if self.state["tasks"].get(task_id, {}).get("status") == "completed":
-                    continue
-                task, directory, response_path = self._prepare(task_id, stage, subject, role, context, schema)
-                if task["attempt"] <= self._attempt_limit(task) and not response_path.exists():
-                    self._start(task)
-                    batch.append((task, directory, self._driver(role, context)))
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                results = list(pool.map(lambda item: execute_command(item[2], item[1]), batch))
-            for (task, _, _), (ok, error) in zip(batch, results):
-                self._finish(task, ok, error)
-        return [
-            self.task(stage, subject, role, context, schema, key=key, validator=validator)
-            for stage, subject, role, context, schema, key, validator in specs
-        ]
+        if self.config["backend"]["kind"] == "manual" or workers < 2:
+            return
+        batch = []
+        for stage, subject, role, context, schema, key, _ in specs:
+            task_id = key or self.key(stage, subject)
+            if self.state["tasks"].get(task_id, {}).get("status") == "completed" or self._over_budget():
+                continue
+            task, directory, response_path = self._prepare(task_id, stage, subject, role, context, schema)
+            if task["attempt"] <= self._attempt_limit(task) and not response_path.exists():
+                self._start(task)
+                batch.append((task, directory, self._driver(role, context)))
+        pool, cancel = ThreadPoolExecutor(max_workers=workers), threading.Event()
+        futures = [pool.submit(execute_command, driver, directory, cancel) for _, directory, driver in batch]
+        try:
+            for (task, _, _), future in zip(batch, futures):
+                self._finish(task, *future.result())
+        except KeyboardInterrupt:
+            # Queued workers never start; running drivers are stopped with their process groups.
+            cancel.set()
+            pool.shutdown(wait=True, cancel_futures=True)
+            for (task, _, _), future in zip(batch, futures):
+                if future.cancelled():
+                    task["status"] = "pending"
+                    self.state["usage"]["worker_calls"] -= 1
+                    self.state["usage"]["reserved_cost"] -= self.config["resources"]["api_cost_per_call"]
+            raise
+        pool.shutdown()
+
+    def tasks(self, specs, accept=None):
+        """Independent tasks with concurrent workers. Responses are validated and accepted in
+        order, so accept(index, data) can apply each before the next is validated."""
+        self._prefetch(specs)
+        results = []
+        for index, (stage, subject, role, context, schema, key, validator) in enumerate(specs):
+            results.append(self.task(stage, subject, role, context, schema, key=key, validator=validator))
+            if accept:
+                accept(index, results[-1])
+        return results
 
     def _sealed_paths(self):
         if not self.state["protocol"]:
@@ -544,7 +571,8 @@ class Workflow:
             "correct.json {correct:bool} and units.json {unit: {metric: [numerator, denominator]}}; every metric "
             "must equal the sum of numerators over the sum of denominators. Provide every strong baseline the "
             "comparison needs as a named program, with its source, version, supervision and compute. "
-            "audit_sample lists sampled items with labels and the evidence for them, for independent checking. "
+            "audit_sample is a JSON list of sampled development items, each with its unit, label and the "
+            "evidence for that label, for independent checking; never include test items. "
             "Protocol uses relative paths; never expose held-out labels in development artifacts. "
             "List shared helper modules, installed local dependencies, weights and feature caches in assets. "
             "Only evaluator, baseline, current program, selected split and these declared assets are staged; "
@@ -666,6 +694,13 @@ class Workflow:
             raise ValueError("split_manifest must list the units of every split")
         if units["screen"] & units["test"] or units["confirm"] & units["test"]:
             raise ValueError("Test units must be disjoint from development units")
+        # Workers read the audit sample, so it may only show development items.
+        audited = read_json(workspace / protocol["audit_sample"])
+        if not isinstance(audited, list) or not audited or any(
+            not isinstance(item, dict) or item.get("unit") not in units["screen"] | units["confirm"]
+            for item in audited
+        ):
+            raise ValueError("audit_sample must be a non-empty list of items whose unit is a development unit")
 
     def _baselines(self, split, seeds):
         return {
@@ -691,27 +726,32 @@ class Workflow:
         self._evidence("diagnosis", None, "explain", "baseline-domain", data)
         self.transition("propose")
 
-    def _ask_experts(self, stage, context, schema, validate=None, subject=None):
+    def _ask_experts(self, stage, context, schema, validate=None, subject=None, accept=None):
         """One independent task per expert, run concurrently; returns (expert_id, response) pairs."""
+        ids = [e["expert_id"] for e in self.state["experts"]]
         specs = []
         for expert in self.state["experts"]:
             eid = expert["expert_id"]
             check = (lambda d, eid=eid: validate(d, eid)) if validate else None
             name = subject(eid) if subject else eid
             specs.append((stage, name, "expert", context | {"expert": expert}, schema, None, check))
-        return list(zip([e["expert_id"] for e in self.state["experts"]], self.tasks(specs)))
+        results = self.tasks(specs, accept and (lambda i, data: accept(ids[i], data)))
+        return list(zip(ids, results))
 
     def _proposal_round(self, stage, context, schema=C.PROPOSALS, final_slate=False):
-        responses = self._ask_experts(
+        def accept(eid, data):
+            for ref in data.get("withdraw", []):
+                self.state["claims"][ref]["active"] = False
+            self._claims(data, eid, self.key(stage, eid))
+
+        # Each response is applied before the next is validated, so a peer's ID clash is a retry.
+        self._ask_experts(
             stage,
             context,
             schema,
             lambda d, eid: self._validate_proposals(d, eid, self.key(stage, eid), final_slate=final_slate),
+            accept=accept,
         )
-        for eid, data in responses:
-            for ref in data.get("withdraw", []):
-                self.state["claims"][ref]["active"] = False
-            self._claims(data, eid, self.key(stage, eid))
 
     def _propose(self):
         # Same immutable context for all authors: peers cannot anchor independent proposals.
@@ -1005,8 +1045,11 @@ class Workflow:
 
         metrics = self.state["protocol"]["metrics"]
         report = {name: compare_results(b, runs, metrics) for name, b in baselines.items()}
-        content = dict(split=split, purpose=purpose, program=runs[0]["program_name"], baselines=report)
-        return add_evidence(self.state, "comparison", ref, "coordinator", content), report
+        run_ids = sorted(r["run_id"] for r in runs + [r for b in baselines.values() for r in b])
+        content = dict(
+            split=split, purpose=purpose, program=runs[0]["program_name"], run_ids=run_ids, baselines=report
+        )
+        return add_evidence(self.state, "comparison", ref, "runs:" + digest(run_ids)[:16], content), report
 
     def _evaluate(self, ref, split, seeds, suffix="", instruction="", purpose="main"):
         """Run one experiment and judge eligibility; only main experiments may change the verdict."""
@@ -1027,6 +1070,8 @@ class Workflow:
         def validate(data):
             if not set(data["evidence_ids"]) <= citable:
                 raise ValueError("Cite only this experiment's runs and comparison")
+            if data["gate"] == "advance" and not completed:
+                raise ValueError("Only completed runs can advance a candidate; use engineer or stop")
             if data["verdict"] == "unchanged":
                 return
             if purpose != "main":
@@ -1035,8 +1080,7 @@ class Workflow:
                 raise ValueError("Incomplete or invalid runs cannot change a scientific verdict")
             if split == "screen" and data["verdict"] == "supported":
                 raise ValueError("Screening grants eligibility only; support requires confirmation")
-            if data["verdict"] in ("supported", "refuted") and not set(data["evidence_ids"]) - {comparison}:
-                raise ValueError("A supported or refuted verdict must cite completed runs")
+            self._check_verdict(ref, data)
 
         data = self.task(
             "judge",
@@ -1064,6 +1108,13 @@ class Workflow:
         self.save()
         return data
 
+    def _check_verdict(self, ref, data):
+        """Apply the verdict to a copy so an accepted response can always be recorded."""
+        if data["verdict"] != "unchanged":
+            from copy import deepcopy
+
+            set_verdict(deepcopy(self.state), ref, data["verdict"], data["evidence_ids"], data["reason"])
+
     def _reassess(self, ref):
         """Combine every current-version result into the claim's verdict after auxiliary experiments."""
         own = {eid for eid, e in self.state["evidence"].items() if e["claim_ref"] == ref}
@@ -1071,6 +1122,7 @@ class Workflow:
         def validate(data):
             if not set(data["evidence_ids"]) <= own:
                 raise ValueError("Cite evidence bound to this claim version")
+            self._check_verdict(ref, data)
 
         data = self.task(
             "reassess",
@@ -1122,7 +1174,8 @@ class Workflow:
             if not set(data["claim_refs"]) <= set(refs):
                 raise ValueError(f"Explain only these claim versions: {sorted(refs)}")
 
-        for eid, data in self._ask_experts("explain", self.context(), C.EXPLANATION, validate):
+        context = self.context() | {"explain_claims": refs}
+        for eid, data in self._ask_experts("explain", context, C.EXPLANATION, validate):
             for ref in data["claim_refs"] or [None]:
                 self._evidence("diagnosis", ref, "explain", eid, data)
         self.transition(next_phase)

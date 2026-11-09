@@ -136,12 +136,14 @@ def _worker_boundary(config: dict, request_dir: Path, argv: list[str]) -> tuple[
     )
 
 
-def execute_command(config: dict, request_dir: Path) -> tuple[bool, str]:
+def execute_command(config: dict, request_dir: Path, cancel=None) -> tuple[bool, str]:
     """Run one independent driver, protecting sealed files and coordinator writes.
 
     The driver reads request.json/prompt.md and writes response.json. Model credentials
     stay in its inherited environment; only the separately isolated experiment runner
     removes credentials and disables networking. Boundary configuration never embeds keys.
+    ``cancel`` (a threading.Event) stops a driver running in a worker thread, which does not
+    receive KeyboardInterrupt itself.
     """
     request_dir = Path(request_dir).resolve()
     paths = {
@@ -173,7 +175,17 @@ def execute_command(config: dict, request_dir: Path) -> tuple[bool, str]:
         except OSError as exc:
             return False, "driver_launch_failed: " + str(exc)
         try:
-            code = process.wait(timeout=config["timeout_seconds"])
+            deadline = time.monotonic() + config["timeout_seconds"]
+            while True:
+                try:
+                    code = process.wait(timeout=1)
+                    break
+                except subprocess.TimeoutExpired:
+                    if cancel is not None and cancel.is_set():
+                        _stop_process_group(process)
+                        return False, "driver_interrupted"
+                    if time.monotonic() > deadline:
+                        raise
         except subprocess.TimeoutExpired:
             if not _stop_process_group(process):
                 return False, "driver_timeout_cleanup_incomplete"

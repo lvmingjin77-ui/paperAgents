@@ -116,7 +116,8 @@ def install_fake_workers(w, monkeypatch):
             for split in units:
                 (workspace / f"{split}.json").write_text(json.dumps({"units": units[split]}))
             (workspace / "split_manifest.json").write_text(json.dumps(units))
-            (workspace / "audit.json").write_text(json.dumps([{"item": "SYNTHETIC", "label": "fixture"}]))
+            audit = [{"unit": "screen-a", "label": "SYNTHETIC", "evidence": "fixture"}]
+            (workspace / "audit.json").write_text(json.dumps(audit))
             (workspace / "evaluate.py").write_text("""import argparse,json,pathlib
 p=argparse.ArgumentParser()
 for name in ('program','data','seed','output'):p.add_argument('--'+name)
@@ -211,7 +212,7 @@ units=json.loads(pathlib.Path(a.data).read_text())['units']
                 next_tests=[],
                 reframe=False,
                 literature_gaps=[],
-                claim_refs=[],
+                claim_refs=context.get("explain_claims", []),
             )
         elif stage == "novelty":
             data = dict(decision="distinct", reason="SYNTHETIC only", references=[])
@@ -243,7 +244,8 @@ units=json.loads(pathlib.Path(a.data).read_text())['units']
                     dict(
                         name="Results",
                         claim_refs=refs,
-                        tex="Synthetic fixture only. " + context["metrics"][-1]["macro"],
+                        tex="Synthetic fixture only. "
+                        + next(m["macro"] for m in reversed(context["metrics"]) if m["claim_ref"] in refs),
                     )
                 ],
                 references=[],
@@ -340,7 +342,7 @@ def test_manual_task_schema_feedback_and_retry(workflow):
 def test_interrupted_worker_resumes_without_repeating_completed_tasks(workflow, monkeypatch):
     calls = []
 
-    def execute(driver, directory):
+    def execute(driver, directory, cancel=None):
         stage = json.loads((directory / "request.json").read_text())["stage"]
         calls.append(stage)
         with (directory / "driver.log").open("a") as stream:

@@ -72,6 +72,14 @@ class FakeWorkflow:
     def save(self):
         pass
 
+    def tasks(self, specs, accept=None):
+        results = []
+        for index, (stage, subject, role, context, schema, key, validator) in enumerate(specs):
+            results.append(self.task(stage, subject, role, context, schema, key=key, validator=validator))
+            if accept:
+                accept(index, results[-1])
+        return results
+
     def task(self, stage, subject, role, context, schema, key=None, validator=None):
         if key in self.responses:
             return deepcopy(self.responses[key])
@@ -289,7 +297,7 @@ def test_domain_revision_reuses_sources_and_preserves_prior_tasks(tmp_path, monk
     w.config["backend"]["kind"] = "glm"
     w.config["loops"]["outer_rounds"] = 1
 
-    def execute(driver, directory):
+    def execute(driver, directory, cancel=None):
         req = read_json(directory / "request.json")
         response = fixture.task(
             req["stage"], req["subject"], req["role"], req["context"], req["output_schema"], req["task_id"]

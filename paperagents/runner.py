@@ -496,8 +496,11 @@ def compare_results(baseline_runs: list[dict], candidate_runs: list[dict], metri
         sign = 1 if spec["direction"] == "max" else -1
 
         def interval(fn):
+            # Identical resamples (e.g. zero events in every unit) carry no bound; never report [x, x].
             values = sorted(v for v in (fn(sample) for sample in samples) if v is not None)
-            return [values[int(0.025 * (len(values) - 1))], values[int(0.975 * (len(values) - 1))]] if values else None
+            if not values or values[0] == values[-1]:
+                return None
+            return [values[int(0.025 * (len(values) - 1))], values[int(0.975 * (len(values) - 1))]]
 
         def improvement(sample):
             b, c = _ratio(base, sample, name), _ratio(cand, sample, name)
@@ -513,22 +516,21 @@ def compare_results(baseline_runs: list[dict], candidate_runs: list[dict], metri
             "n_units": len(units),
         }
         signs.append(0 if ci is None else (1 if ci[0] > 0 else (-1 if ci[1] < 0 else 0)))
+    # An unresolved metric is not evidence of non-inferiority, so domination needs every metric resolved.
     relation = "insufficient_paired_evidence"
     if units and len(signs) == len(metrics):
-        if all(s >= 0 for s in signs) and any(s > 0 for s in signs):
-            relation = "candidate_dominates"
-        elif all(s <= 0 for s in signs) and any(s < 0 for s in signs):
-            relation = "baseline_dominates"
-        elif all(s == 0 for s in signs):
-            relation = "no_resolved_difference"
-        else:
+        if 1 in signs and -1 in signs:
             relation = "tradeoff"
+        elif 0 in signs:
+            relation = "unresolved"
+        else:
+            relation = "candidate_dominates" if signs[0] > 0 else "baseline_dominates"
     return {
         "baseline": baseline,
         "candidate": candidate,
         "unit_bootstrap": bootstrap,
         "pareto_relation": relation,
         "uncertainty": "95% percentile intervals from paired resampling of independent statistical units; "
-        "seed spread is reported separately.",
+        "null when every resample is identical (e.g. zero events), which bounds nothing. Seed spread is separate.",
         "decision": "Requires independent critic using protocol thresholds, uncertainty and claim scope.",
     }
