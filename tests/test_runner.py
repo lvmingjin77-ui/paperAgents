@@ -77,3 +77,12 @@ def test_unresolved_metric_is_not_domination(setup, tmp_path):
     (setup[0] / "candidate.json").write_text(json.dumps({"gain": 0.2, "far": 0.1}))
     base, cand = run(setup, tmp_path, "baseline", "b"), run(setup, tmp_path, "candidate", "c")
     assert compare_results([base], [cand], setup[1]["metrics"])["pareto_relation"] == "unresolved"
+
+
+def test_sealed_split_and_inputs_stay_protected(setup, tmp_path):
+    workspace, protocol, config = setup
+    protocol["assets"] = ["."]  # a shared asset directory that also contains the test split
+    (workspace / "candidate.json").write_text(json.dumps({"gain": 0.2, "far": 0.05}))
+    result = run_experiment(workspace, tmp_path / "c", protocol, "candidate", "screen", 1, config)
+    assert result["outcome"] == "completed"
+    assert not (tmp_path / "c" / "workspace" / "test.json").exists()

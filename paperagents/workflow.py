@@ -302,9 +302,14 @@ class Workflow:
                 accept(index, results[-1])
         return results
 
-    def _ask_experts(self, stage, context, schema, validate=None, subject=None, accept=None):
-        """One independent task per expert; returns (expert_id, response) pairs."""
-        ids = [e["expert_id"] for e in self.state["experts"]]
+    def _involved(self, owners):
+        """The domain expert and the authors concerned; others read the shared record but need not respond."""
+        return [e for e in self.state["experts"] if e["role"] == "domain" or e["expert_id"] in owners]
+
+    def _ask_experts(self, stage, context, schema, validate=None, subject=None, accept=None, experts=None):
+        """One independent task per participating expert; returns (expert_id, response) pairs."""
+        experts = self.state["experts"] if experts is None else experts
+        ids = [e["expert_id"] for e in experts]
         specs = [
             (
                 stage,
@@ -315,7 +320,7 @@ class Workflow:
                 None,
                 validate and (lambda d, eid=e["expert_id"]: validate(d, eid)),
             )
-            for e in self.state["experts"]
+            for e in experts
         ]
         return list(zip(ids, self.tasks(specs, accept and (lambda i, data: accept(ids[i], data)))))
 
@@ -418,7 +423,7 @@ class Workflow:
         if final_slate and sum(c["owner"] == owner for c in active_claims(trial)) > limit:
             raise ValueError(f"{owner}: keep at most {limit} active candidates; withdraw or merge the others")
 
-    def _proposal_round(self, stage, context, schema=C.PROPOSALS, final_slate=False):
+    def _proposal_round(self, stage, context, schema=C.PROPOSALS, final_slate=False, experts=None):
         def accept(eid, data):
             for ref in data.get("withdraw", []):
                 self.state["claims"][ref]["active"] = False
@@ -433,6 +438,7 @@ class Workflow:
             schema,
             lambda d, eid: self._validate_proposals(d, eid, self.key(stage, eid), final_slate=final_slate),
             accept=accept,
+            experts=experts,
         )
 
     def _evidence(self, kind, ref, stage, subject, data):
@@ -603,13 +609,18 @@ class Workflow:
         self.transition("revise")
 
     def _revise(self):
+        # Only authors whose claims drew comments revise; the others keep their proposals.
         comments = [read_json(Path(self.state["tasks"][self.key("exchange", e["expert_id"])]["response_path"]))
-                    for e in self.state["experts"]]
-        self._proposal_round("revise", self.context() | {
-            "comments": comments,
-            "instruction": "Return revised own proposals only; the same ID makes a new version. Use new IDs with "
-            "parent refs for combinations. Empty claims retains your proposals; explain why.",
-        })
+                    for e in self.state["experts"] if self.key("exchange", e["expert_id"]) in self.state["tasks"]]
+        owners = {self.state["claims"][c["claim_ref"]]["owner"] for r in comments for c in r["comments"]
+                  if c["claim_ref"] in self.state["claims"]}
+        authors = [e for e in self.state["experts"] if e["expert_id"] in owners]
+        if authors:
+            self._proposal_round("revise", self.context() | {
+                "comments": comments,
+                "instruction": "Return revised own proposals only; the same ID makes a new version. Use new IDs "
+                "with parent refs for combinations. Empty claims retains your proposals; explain why.",
+            }, experts=authors)
         self.transition("triage")
 
     def _triage(self):
@@ -617,10 +628,15 @@ class Workflow:
         self.transition("merge")
 
     def _merge(self):
+        # Only authors of grouped candidates confirm a merge, withdraw, or state the difference.
         triage = self.task("triage", "pool", "critic", self.context(), C.TRIAGE)
-        limit = self.config["loops"]["max_candidates_per_expert"]
-        self._proposal_round("merge", self.context() | {"triage": triage, "max_active_candidates": limit},
-                             C.MERGE, final_slate=True)
+        owners = {self.state["claims"][r]["owner"] for g in triage["groups"] for r in g["members"]
+                  if r in self.state["claims"]}
+        authors = [e for e in self.state["experts"] if e["expert_id"] in owners]
+        if authors:
+            limit = self.config["loops"]["max_candidates_per_expert"]
+            self._proposal_round("merge", self.context() | {"triage": triage, "max_active_candidates": limit},
+                                 C.MERGE, final_slate=True, experts=authors)
         self.transition("assess")
 
     def _assess(self):
@@ -706,9 +722,14 @@ class Workflow:
         protocol = self.state["protocol"]
         name = program if ref is None else "candidate"
         relative = protocol["programs"][program] if ref is None else program
+        from .runner import tree_hash
+
+        # The implementation's content is part of the run identity: changed code never reuses old scores.
+        code = tree_hash(self.run_dir / "workspace" / relative)
         results = []
         for seed in seeds:
-            rid = "run-" + digest([protocol["protocol_id"], ref, relative, split, seed, suffix, self.state["outer_round"]])[:20]
+            rid = "run-" + digest([protocol["protocol_id"], ref, relative, code, split, seed, suffix,
+                                   self.state["outer_round"]])[:20]
             if rid not in self.state["runs"]:
                 if not self.execute:
                     self.pause("ready_for_experiment", "Prepared and reviewed; resume with --execute to run experiments")
@@ -838,7 +859,9 @@ class Workflow:
             if not set(data["claim_refs"]) <= set(refs):
                 raise ValueError(f"Explain only these claim versions: {sorted(refs)}")
 
-        for eid, data in self._ask_experts("explain", self.context() | {"explain_claims": refs}, C.EXPLANATION, validate):
+        owners = {self.state["claims"][r]["owner"] for r in refs}
+        for eid, data in self._ask_experts("explain", self.context() | {"explain_claims": refs}, C.EXPLANATION,
+                                           validate, experts=self._involved(owners)):
             for ref in data["claim_refs"] or [None]:
                 self._evidence("diagnosis", ref, "explain", eid, data)
         self.transition(next_phase)
@@ -893,8 +916,7 @@ class Workflow:
         good = [r for r in self.state["confirmed"] if self.state["claims"][r]["active"]]
         explanations = [read_json(Path(self.state["tasks"][self.key("explain", e["expert_id"])]["response_path"]))
                         for e in self.state["experts"] if self.key("explain", e["expert_id"]) in self.state["tasks"]]
-        if not good and explanations and len(explanations) == len(self.state["experts"]) \
-                and all(e["reframe"] for e in explanations):
+        if not good and explanations and all(e["reframe"] for e in explanations):
             self._reframe("Experts diagnose a problem-framing failure")
             return
         known = self.state.get("requested_gaps", []) + self.state.get("unresolved_gaps", [])
@@ -917,8 +939,9 @@ class Workflow:
             request_literature(self, gaps)
             self.transition("knowledge_update")
         else:
+            # New versions go to de-duplication and assessment; a full exchange follows only new literature.
             self._leave_unresolved(gaps)
-            self.transition("exchange")
+            self.transition("triage")
 
     def _leave_unresolved(self, gaps):
         """Gaps that cannot be filled stay visible to writers and reviewers as known limits."""
@@ -965,7 +988,8 @@ class Workflow:
         contributions = [data for _, data in self._ask_experts(
             "write_section", context | {"assignment": "Domain: problem, related work and interpretation. Paper and "
                                         "temporary experts: own methods, analyses, limitations and responses to reviews."},
-            C.SECTION_DRAFT, subject=lambda eid: f"{review_round}-{eid}")]
+            C.SECTION_DRAFT, subject=lambda eid: f"{review_round}-{eid}",
+            experts=self._involved({c["owner"] for c in active_claims(self.state)}))]
         data = self.task("write", f"draft-{review_round}", "expert", context | {
             "expert": self._domain(), "contributions": contributions,
             "editor_instruction": "Unify the manuscript and select relevant figures from the catalog. Preserve claim "
@@ -992,7 +1016,8 @@ class Workflow:
         rebuttals = [data for _, data in self._ask_experts(
             "rebuttal", context | {"instruction": "Respond using existing evidence; concede valid criticism. Propose "
                                    "new development experiments when needed, never invent their outcomes."},
-            C.REBUTTAL, subject=lambda eid: f"{review_round}-{eid}")]
+            C.REBUTTAL, subject=lambda eid: f"{review_round}-{eid}",
+            experts=self._involved({c["owner"] for c in active_claims(self.state)}))]
         self.state["rebuttals"] = rebuttals
 
         def validate(data):

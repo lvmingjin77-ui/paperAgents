@@ -37,14 +37,21 @@ def tree_hash(path: Path) -> str:
 
 
 def _stage(workspace: Path, destination: Path, protocol: dict, program: str, split: str) -> None:
-    """Copy only the evaluator, baseline, this program, this split and declared assets."""
+    """Copy only the evaluator, baseline, this program, this split and declared assets.
+
+    Other splits are never copied, even when they sit inside a declared asset directory.
+    """
+    hidden = {(workspace / path).resolve() for name, path in protocol["splits"].items() if name != split}
     names = [protocol["evaluator"], protocol["programs"]["baseline"], protocol["programs"][program],
              protocol["splits"][split], *protocol["assets"]]
     for name in dict.fromkeys(names):
         source, target = workspace / name, destination / name
+        if source.resolve() in hidden:
+            continue
         target.parent.mkdir(parents=True, exist_ok=True)
         if source.is_dir():
-            shutil.copytree(source, target, dirs_exist_ok=True)
+            shutil.copytree(source, target, dirs_exist_ok=True,
+                            ignore=lambda d, items: [i for i in items if (Path(d) / i).resolve() in hidden])
         else:
             shutil.copy2(source, target)
 
@@ -62,7 +69,8 @@ def _sandbox(argv: list[str], stage: Path, output: Path, python: Path, mode: str
             "(version 1)", "(deny default)", "(allow process*)", "(allow sysctl-read)", "(allow mach-lookup)",
             "(allow ipc-posix*)", "(allow iokit-open)", "(allow file-read-metadata)", "(allow file-map-executable)",
             '(allow file-read-data (literal "/"))', f"(allow file-read* {reads})",
-            f'(allow file-write* (subpath {json.dumps(str(output))}) (literal "/dev/null"))', "(deny network*)",
+            f'(allow file-write* (subpath {json.dumps(str(output))}) (literal "/dev/null"))',
+            f"(deny file-write* (subpath {json.dumps(str(stage))}))", "(deny network*)",
         ]))
         return [shutil.which("sandbox-exec"), "-f", str(profile), *argv]
     if platform.system() == "Linux" and shutil.which("bwrap"):
@@ -71,7 +79,8 @@ def _sandbox(argv: list[str], stage: Path, output: Path, python: Path, mode: str
         for path in [Path(p) for p in ("/usr", "/bin", "/lib", "/lib64")] + runtime[2:]:
             if path.exists():
                 command += ["--ro-bind", str(path), str(path)]
-        return command + ["--ro-bind", str(stage), str(stage), "--bind", str(output), str(output), *argv]
+        # The output bind comes first so the staged inputs inside it stay read-only.
+        return command + ["--bind", str(output), str(output), "--ro-bind", str(stage), str(stage), *argv]
     raise ValueError('No experiment sandbox (sandbox-exec or bwrap); set execution.sandbox = "none" explicitly')
 
 
@@ -105,7 +114,7 @@ def run_experiment(workspace: Path, output_dir: Path, protocol: dict, program: s
     env = {"PATH": f"{python.parent}{os.pathsep}/usr/bin:/bin", "LANG": "en_US.UTF-8", "HOME": str(output_dir / "home"),
            "TMPDIR": str(output_dir / "tmp"), "PYTHONNOUSERSITE": "1", "HF_HUB_OFFLINE": "1",
            "TRANSFORMERS_OFFLINE": "1", "TZ": "UTC"}
-    started = time.monotonic()
+    started, inputs = time.monotonic(), tree_hash(stage)
     try:
         command = _sandbox(argv, stage, output_dir, python, execution["sandbox"])
         with (output_dir / "driver.log").open("wb") as log:
@@ -132,6 +141,8 @@ def run_experiment(workspace: Path, output_dir: Path, protocol: dict, program: s
                            metrics={n: metrics[n] for n in protocol["metrics"]}, units_path=str(results / "units.json"))
         elif "returncode" in receipt:
             receipt["reason"] = "Evaluator failed; see driver.log"
+        if tree_hash(stage) != inputs:
+            receipt.update(outcome="protocol_failed", reason="The experiment modified its own inputs")
     except (OSError, ValueError, KeyError, TypeError) as error:
         receipt.update(outcome="protocol_failed", reason=str(error))
     receipt["elapsed_seconds"] = round(time.monotonic() - started, 3)
