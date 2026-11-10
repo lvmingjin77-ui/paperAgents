@@ -176,7 +176,9 @@ TESTBED = obj(
 )
 TESTBED["allOf"] = [{"if": {"properties": {"status": {"const": "ready"}}}, "then": {"properties": {"protocol": PROTOCOL}}}]
 BUILD = obj({"program": TEXT, "changes": TEXT, "protocol_changes": BOOL, "reason": TEXT})
-ABLATION_PLAN = obj({"variants": array(obj({"id": TEXT, "change": TEXT, "prediction": TEXT}), 1)})
+ABLATION_PLAN = obj(
+    {"variants": array(obj({"id": TEXT, "change": TEXT, "rules_out": TEXT, "prediction": TEXT}), 1)}
+)
 DECISION = enum("accept", "revise", "experiments", "reframe")
 PEER_REVIEW = obj(
     {"decision": DECISION, "reason": TEXT, "dimensions": SCORES, "required_experiments": TEXTS, "claim_refs": TEXTS}

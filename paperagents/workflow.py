@@ -384,6 +384,9 @@ class Workflow:
         experts = []
         for expert in self.state["experts"]:
             entry = {k: expert[k] for k in ("expert_id", "role", "source_paper_ids")}
+            if review := expert.get("review"):
+                # Every task sees where an expert's knowledge may be used, not only the expert itself.
+                entry |= {k: review[k] for k in ("permitted_uses", "limitations")}
             if asset := expert.get("_asset"):
                 entry["asset_path"] = str(Path(asset["path"]) / "asset.json")
             experts.append(entry)

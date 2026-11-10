@@ -90,7 +90,7 @@ def answer(w, stage, subject, context):
     if stage == "novelty":
         return dict(decision="distinct", reason="SYNTHETIC", references=[])
     if stage == "ablation_plan":
-        return {"variants": [dict(id="remove", change="SYNTHETIC", prediction="Quality decreases")]}
+        return {"variants": [dict(id="remove", change="SYNTHETIC", rules_out="SYNTHETIC", prediction="Quality decreases")]}
     if stage == "write_section":
         return dict(sections=[], references=[])
     if stage in ("write", "finalize"):
