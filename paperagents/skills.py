@@ -46,6 +46,7 @@ STAGE_SKILLS = {
     "ablation_plan": ["plan-ablation"],
     "ablation_review": ["plan-ablation", "screen-and-diagnose"],
     "freeze": ["screen-and-diagnose", "verify-method-tools"],
+    "argument": ["write-section"],
     "write_section": ["write-section"],
     "rebuttal": ["review-paper", "write-section"],
     "testbed_plan": ["build-testbed"],

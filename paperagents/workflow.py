@@ -908,6 +908,7 @@ class Workflow:
                 "or scientific changes require an author-created new version and new confirmation.",
             }, C.REVIEW)
             self._evidence("assessment", ref, "ablation_review", ref, review)
+            self._reassess(ref)
             if review["accepted"]:
                 claim["stage"] = "ablation"
                 if ref not in self.state["confirmed"]:
@@ -928,23 +929,25 @@ class Workflow:
             self._leave_unresolved(gaps)
             self.transition("draft")
             return
-        self._proposal_round("evolve", self.context() | {
-            "instruction": "Use successes, failures, peer explanations, novelty and ablations. Propose new versions "
-            "or new routes; do not silently inherit evidence.",
-        })
-        self.state["cycle"] += 1
         if gaps and self.state.get("literature_round", 0) < loops["literature_rounds"]:
+            # Read first: the evolution round below then proposes with the new literature in hand.
             from .knowledge import request_literature
 
             self.state["literature_round"] = self.state.get("literature_round", 0) + 1
             self.state.setdefault("requested_gaps", []).extend(gaps)
             self.state["previous_experts"] = self.state["experts"]
+            self.state["literature_updated"] = True
             request_literature(self, gaps)
             self.transition("knowledge_update")
-        else:
-            # New versions go to de-duplication and assessment; a full exchange follows only new literature.
-            self._leave_unresolved(gaps)
-            self.transition("triage")
+            return
+        self._leave_unresolved(gaps)
+        self._proposal_round("evolve", self.context() | {
+            "instruction": "Use successes, failures, peer explanations, novelty, ablations and new literature. "
+            "Propose new versions or new routes; do not silently inherit evidence.",
+        })
+        self.state["cycle"] += 1
+        # New versions go to de-duplication and assessment; a full exchange follows only new literature.
+        self.transition("exchange" if self.state.pop("literature_updated", False) else "triage")
 
     def _leave_unresolved(self, gaps):
         """Gaps that cannot be filled stay visible to writers and reviewers as known limits."""
@@ -963,7 +966,7 @@ class Workflow:
         owners = {c["owner"] for c in active_claims(self.state)}
         current = {e["expert_id"] for e in self.state["experts"]}
         self.state["experts"] += [e for e in previous if e["expert_id"] in owners - current]
-        self.transition("exchange")
+        self.transition("evolve")
 
     # ----- writing and review ------------------------------------------------------------
     def _manuscript_context(self):
@@ -988,6 +991,12 @@ class Workflow:
             "negative and inconclusive results. A publishable analysis needs real diagnostic value; failing to beat "
             "a baseline is not enough.",
         }
+        context["argument"] = self.task("argument", f"argument-{review_round}", "expert", context | {
+            "expert": self._domain(),
+            "instruction": "Settle what the evidence lets this paper claim before any prose: the question, the answer "
+            "it supports, each contribution and analysis with the evidence behind it, negative results and limits.",
+        }, C.ARGUMENT, validator=self._check_argument)
+        self.state["argument"] = context["argument"]
         contributions = [data for _, data in self._ask_experts(
             "write_section", context | {"assignment": "Domain: problem, related work and interpretation. Paper and "
                                         "temporary experts: own methods, analyses, limitations and responses to reviews."},
@@ -1002,13 +1011,30 @@ class Workflow:
         self.save()
         self.transition("peer_review")
 
+    def _check_argument(self, data):
+        """Every contribution and analysis rests on recorded evidence of the claim versions it names."""
+        evidence = self.state["evidence"]
+        for item in data["contributions"] + data["analyses"]:
+            refs = set(item["claim_refs"])
+            if not refs <= set(self.state["claims"]):
+                raise ValueError(f"Unknown claim versions in argument: {sorted(refs - set(self.state['claims']))}")
+            for eid in item["evidence_ids"]:
+                if eid not in evidence or evidence[eid]["claim_ref"] not in refs | {None}:
+                    raise ValueError(f"{eid} is not evidence of {sorted(refs)}")
+
     def _peer_review(self):
         # No other reviewers' judgments in context; reviewers never authored the draft.
-        context = self.context() | {"draft": self.state["draft"]}
+        context = self.context() | {"draft": self.state["draft"], "argument": self.state.get("argument", {})}
         review_round = self.state.get("review_round", 0)
+
+        def opened(data):
+            missing = [i["path"] for i in data["inspected"] if not (self.run_dir / i["path"]).exists()]
+            if missing:
+                raise ValueError(f"Inspected paths must exist in this run: {missing}")
+
         self.state["reviews"] = self.tasks([
             ("peer_review", f"review-{review_round}-{i}", "reviewer",
-             context | {"perspective": ["methods", "evidence", "novelty"][i % 3]}, C.PEER_REVIEW, None, None)
+             context | {"perspective": ["methods", "evidence", "novelty"][i % 3]}, C.PEER_REVIEW, None, opened)
             for i in range(self.config["loops"]["reviewers"])
         ])
         self.transition("meta_review")
@@ -1113,6 +1139,7 @@ class Workflow:
             "claims": {r: self.state["claims"][r] for r in refs},
             "final_runs": [r for r in self.state["runs"].values() if r["split"] == "test"],
             "unresolved_literature_gaps": self.state.get("unresolved_gaps", []),
+            "argument": self.state.get("argument", {}),
             "expert": self._domain(),
             "instruction": "Only report final results and downgrade claims as needed. Do not change methods, "
             "claim text or protocols, and run no further experiments.",

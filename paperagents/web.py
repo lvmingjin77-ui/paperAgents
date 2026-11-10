@@ -163,6 +163,7 @@ class View:
             "meta_review",
             "freeze",
             "testbed_plan",
+            "argument",
             "write_section",
             "rebuttal",
             "final_judgment",

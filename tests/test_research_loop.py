@@ -91,6 +91,15 @@ def answer(w, stage, subject, context):
         return dict(decision="distinct", reason="SYNTHETIC", references=[])
     if stage == "ablation_plan":
         return {"variants": [dict(id="remove", change="SYNTHETIC", rules_out="SYNTHETIC", prediction="Quality decreases")]}
+    if stage == "reassess":
+        own = [e for e, item in w.state["evidence"].items() if item["claim_ref"] == subject]
+        return dict(verdict="unchanged", prediction_tested="Quality increases", reason="SYNTHETIC", evidence_ids=own)
+    if stage == "argument":
+        bound = [(e, item["claim_ref"]) for e, item in w.state["evidence"].items() if item["claim_ref"] in claims]
+        eid, ref = bound[-1]
+        item = dict(statement="SYNTHETIC", claim_refs=[ref], evidence_ids=[eid])
+        return dict(question="SYNTHETIC", answer="SYNTHETIC", contributions=[item], analyses=[],
+                    negative_results=[], limits=[])
     if stage == "write_section":
         return dict(sections=[], references=[])
     if stage in ("write", "finalize"):
@@ -99,7 +108,8 @@ def answer(w, stage, subject, context):
         return dict(title="SYNTHETIC", sections=[dict(name="Results", claim_refs=refs, tex="SYNTHETIC " + macro)],
                     references=[], figures=[])
     if stage == "peer_review":
-        return dict(decision="accept", reason="SYNTHETIC", dimensions=scores, required_experiments=[], claim_refs=[])
+        return dict(decision="accept", reason="SYNTHETIC", dimensions=scores, required_experiments=[], claim_refs=[],
+                    inspected=[dict(path="workspace", claim_ref=claims[0], finding="SYNTHETIC")])
     if stage == "rebuttal":
         return dict(response="SYNTHETIC", evidence_ids=[], required_experiments=[])
     if stage == "meta_review":

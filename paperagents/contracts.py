@@ -124,6 +124,18 @@ EXPLANATION = obj(
 )
 NOVELTY = obj({"decision": enum("distinct", "revise", "withdraw"), "reason": TEXT, "references": TEXTS})
 
+# The argument is settled from the evidence before any prose is written.
+BOUND = {"claim_refs": TEXTS, "evidence_ids": array(TEXT, 1)}
+ARGUMENT = obj(
+    {
+        "question": TEXT,
+        "answer": TEXT,
+        "contributions": array(obj({"statement": TEXT, **BOUND}), 1),
+        "analyses": array(obj({"question": TEXT, "finding": TEXT, **BOUND})),
+        "negative_results": TEXTS,
+        "limits": TEXTS,
+    }
+)
 SECTION = obj({"name": TEXT, "claim_refs": TEXTS, "tex": TEXT})
 SECTION_DRAFT = obj({"sections": array(SECTION), "references": array({"type": "object"})})
 FIGURE = obj({"path": TEXT, "claim_refs": TEXTS, "caption": TEXT, "run_ids": TEXTS})
@@ -180,8 +192,17 @@ ABLATION_PLAN = obj(
     {"variants": array(obj({"id": TEXT, "change": TEXT, "rules_out": TEXT, "prediction": TEXT}), 1)}
 )
 DECISION = enum("accept", "revise", "experiments", "reframe")
+# What a reviewer actually opened (code, receipts, logs, units) and found, so a meta-review can weigh it.
+INSPECTED = array(obj({"path": TEXT, "claim_ref": TEXT, "finding": TEXT}), 1)
 PEER_REVIEW = obj(
-    {"decision": DECISION, "reason": TEXT, "dimensions": SCORES, "required_experiments": TEXTS, "claim_refs": TEXTS}
+    {
+        "decision": DECISION,
+        "reason": TEXT,
+        "dimensions": SCORES,
+        "inspected": INSPECTED,
+        "required_experiments": TEXTS,
+        "claim_refs": TEXTS,
+    }
 )
 META_REVIEW = obj({"decision": DECISION, "reason": TEXT, "claim_refs": TEXTS, "required_experiments": TEXTS})
 REBUTTAL = obj({"response": TEXT, "evidence_ids": TEXTS, "required_experiments": TEXTS})
