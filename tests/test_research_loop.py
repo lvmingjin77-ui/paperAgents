@@ -109,7 +109,7 @@ def answer(w, stage, subject, context):
                     references=[], figures=[])
     if stage == "peer_review":
         return dict(decision="accept", reason="SYNTHETIC", dimensions=scores, required_experiments=[], claim_refs=[],
-                    inspected=[dict(path="workspace", claim_ref=claims[0], finding="SYNTHETIC")])
+                    inspected=[dict(path="workspace/evaluate.py", claim_ref=claims[0], finding="SYNTHETIC")])
     if stage == "rebuttal":
         return dict(response="SYNTHETIC", evidence_ids=[], required_experiments=[])
     if stage == "meta_review":
@@ -132,7 +132,7 @@ def w(tmp_path, monkeypatch):
 
     def knowledge(workflow):
         workflow.state["experts"] = [dict(expert_id="domain", role="domain", source_paper_ids=[])]
-        workflow.state["knowledge"] = {"corpus": {"papers": []}}
+        workflow.state["knowledge"].setdefault("corpus", {"papers": []})
 
     def task(stage, subject, role, context, schema, key=None, validator=None):
         task_id = key or w.key(stage, subject)
@@ -155,6 +155,29 @@ def w(tmp_path, monkeypatch):
 
 def test_experiments_wait_for_explicit_execution(w):
     assert w.run()["status"] == "ready_for_experiment"
+    assert not w.state["runs"]
+
+
+def test_domain_revision_replans_an_unapproved_testbed(w, monkeypatch):
+    task = w.task
+
+    def pause_before_build(stage, *args, **kwargs):
+        if stage == "build_testbed":
+            w.pause("awaiting_retry", "Synthetic interrupted testbed construction")
+        return task(stage, *args, **kwargs)
+
+    monkeypatch.setattr(w, "task", pause_before_build)
+    assert w.run()["status"] == "awaiting_retry"
+    old_plan = w.key("testbed_plan", "plan-0")
+    assert old_plan in w.state["tasks"]
+    assert not w.state["protocol"]
+
+    w.revise("domain", "Correct the evidence used to design the testbed")
+    monkeypatch.setattr(w, "task", task)
+    assert w.run()["status"] == "ready_for_experiment"
+    assert w.key("testbed_plan", "plan-0-domain1") in w.state["tasks"]
+    assert w.key("build_testbed", "protocol-0-domain1") in w.state["tasks"]
+    assert w.key("protocol_review", "protocol-0-domain1") in w.state["tasks"]
     assert not w.state["runs"]
 
 

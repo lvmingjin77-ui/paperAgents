@@ -524,6 +524,8 @@ class Workflow:
         if not self.state["protocol"]:
             workspace.mkdir(exist_ok=True)
             revision = self.state.get("testbed_revision", 0)
+            domain_revision = self.state["knowledge"].get("domain_revision", 0)
+            subject = f"{revision}-domain{domain_revision}" if domain_revision else str(revision)
             domain = next(e for e in self.state["experts"] if e["role"] == "domain")
             context = self.context() | {
                 "inputs": str(self.project / "inputs"),
@@ -536,9 +538,9 @@ class Workflow:
                 "items, each with its unit, label and the evidence for that label; never include test items. "
                 "Declare shared modules, dependencies, weights and feature caches as assets.",
             }
-            plan = self.task("testbed_plan", f"plan-{revision}", "expert", context | {"expert": domain}, C.TESTBED_PLAN)
+            plan = self.task("testbed_plan", f"plan-{subject}", "expert", context | {"expert": domain}, C.TESTBED_PLAN)
             data = self.task(
-                "build_testbed", f"protocol-{revision}", "engineer", context | {"expert_plan": plan},
+                "build_testbed", f"protocol-{subject}", "engineer", context | {"expert_plan": plan},
                 C.TESTBED, validator=self._check_protocol,
             )
             if data["status"] != "ready":
@@ -548,7 +550,7 @@ class Workflow:
             protocol = data["protocol"]
             protocol["protocol_id"] = "p-" + digest({"protocol": protocol, "code": tree_hash(workspace)})[:16]
             review = self.task(
-                "protocol_review", f"protocol-{revision}", "critic",
+                "protocol_review", f"protocol-{subject}", "critic",
                 context | {"proposed_protocol": protocol, "instruction": "Inspect audit_sample item by item "
                            "against its sources, the split manifest and the baselines; a plausible summary is "
                            "not evidence of valid labels or independent splits."},
@@ -1014,13 +1016,18 @@ class Workflow:
     def _check_argument(self, data):
         """Every contribution and analysis rests on recorded evidence of the claim versions it names."""
         evidence = self.state["evidence"]
+        known = set(self.state["claims"])
         for item in data["contributions"] + data["analyses"]:
             refs = set(item["claim_refs"])
-            if not refs <= set(self.state["claims"]):
-                raise ValueError(f"Unknown claim versions in argument: {sorted(refs - set(self.state['claims']))}")
+            if not refs or not refs <= known:
+                raise ValueError(f"Argument must name nonempty existing claim versions: {sorted(refs)}")
+            bound = set()
             for eid in item["evidence_ids"]:
                 if eid not in evidence or evidence[eid]["claim_ref"] not in refs | {None}:
                     raise ValueError(f"{eid} is not evidence of {sorted(refs)}")
+                bound.add(evidence[eid]["claim_ref"])
+            if not refs <= bound:
+                raise ValueError(f"Argument lacks evidence bound to {sorted(refs - bound)}")
 
     def _peer_review(self):
         # No other reviewers' judgments in context; reviewers never authored the draft.
@@ -1028,9 +1035,14 @@ class Workflow:
         review_round = self.state.get("review_round", 0)
 
         def opened(data):
-            missing = [i["path"] for i in data["inspected"] if not (self.run_dir / i["path"]).exists()]
-            if missing:
-                raise ValueError(f"Inspected paths must exist in this run: {missing}")
+            root = self.run_dir.resolve()
+            known = set(self.state["claims"])
+            for item in data["inspected"]:
+                if item["claim_ref"] not in known:
+                    raise ValueError(f"Inspection must name an existing claim: {item['claim_ref']}")
+                path = (root / item["path"]).resolve()
+                if not path.is_relative_to(root) or not path.is_file():
+                    raise ValueError(f"Inspected file must be inside this run: {item['path']}")
 
         self.state["reviews"] = self.tasks([
             ("peer_review", f"review-{review_round}-{i}", "reviewer",

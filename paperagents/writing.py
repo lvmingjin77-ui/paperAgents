@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess
 
-from .storage import digest, read_json, write_json
+from .storage import digest, write_json
 
 _CITE = re.compile(r"\\cite\w*\*?(?:\[[^]]*\])*\{([^}]+)\}")
 _METRIC = re.compile(r"\\metric\{([^}]+)\}\{([^}]+)\}")

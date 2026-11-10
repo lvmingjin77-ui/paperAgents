@@ -189,10 +189,10 @@ DOMAIN_EXPERT["properties"].update(
     responses=arr(
         obj(correction_id=TEXT, decision={"enum": ["applied", "rejected"]}, change=TEXT, reason=TEXT)
     ),
-    selection_rationale=TEXT,
+    selection=SELECTION,
     team_valid={"type": "boolean", "description": "Whether the selected team holds after the corrections."},
 )
-DOMAIN_EXPERT["required"] += ["domain", "responses", "selection_rationale", "team_valid"]
+DOMAIN_EXPERT["required"] += ["domain", "responses", "selection", "team_valid"]
 REVIEW_CRITERIA = ["source_fidelity", "method_understanding", "transfer_limits", "implementation_claims"]
 EXPERT_REVIEW = obj(
     accepted={"type": "boolean"},
@@ -264,8 +264,14 @@ def _task(w, stage, subject, role, context, schema, validator=None):
 
 def revise_domain(w, reason):
     """Correct the landscape and rebuild its team without repeating source collection."""
-    if w.state["phase"] != "knowledge" or w.state["protocol"]:
-        raise ValueError("Domain revision is only available before testbed; revise from knowledge instead")
+    if w.state["phase"] not in {"knowledge", "testbed"} or w.state["protocol"]:
+        raise ValueError("Domain revision is only available before protocol approval; revise from knowledge instead")
+    w.state["phase"] = "knowledge"
+    _restart_domain(w, reason)
+
+
+def _restart_domain(w, reason):
+    """Restart knowledge tasks only; verified corrections may also require this during a literature update."""
     k = w.state.setdefault("knowledge", {})
     previous = w.state["tasks"].get(_task_key(w, "domain", "domain"))
     if previous and previous["status"] == "completed":
@@ -275,12 +281,13 @@ def revise_domain(w, reason):
     for field in ("complete_outer_round", "domain", "selection"):
         k.pop(field, None)
     w.state["experts"] = []
+    pre_protocol = not w.state["protocol"]
+    if pre_protocol:
+        w.state.update(testbed_revision=0, testbed_feedback={})
     for task in w.state["tasks"].values():
-        if (
-            task["task_id"].startswith(f"k{w.state['outer_round']}-")
-            and task["stage"] in DOMAIN_STAGES
-            and task["status"] != "completed"
-        ):
+        domain_task = task["task_id"].startswith(f"k{w.state['outer_round']}-") and task["stage"] in DOMAIN_STAGES
+        testbed_task = pre_protocol and task["stage"] in {"testbed_plan", "build_testbed", "protocol_review"}
+        if task["status"] != "completed" and (domain_task or testbed_task):
             task["status"] = "superseded"
     w.event("domain_revision_requested", revision=k["domain_revision"], reason=reason)
 
@@ -333,9 +340,19 @@ def _validate_expert(expert, expert_id, role, source_papers):
         raise ValueError(f"source_paths must be existing local files (links go in source_urls): {missing}")
 
 
-def _validate_domain_expert(expert, source_papers, corrections, papers):
+def _validate_domain_expert(expert, source_papers, corrections, papers, selection, research):
     _validate_expert(expert, "domain", "domain", source_papers)
     _validate_sources(expert["domain"]["source_paper_ids"], papers, "Domain")
+    _validate_selection(expert["selection"], papers, research)
+
+    def team(data):
+        return (
+            sorted((m["expert_id"], m["paper_id"]) for m in data["core_papers"]),
+            sorted((m["expert_id"], sorted(m["source_paper_ids"])) for m in data["temporary_experts"]),
+        )
+
+    if team(expert["selection"]) != team(selection):
+        raise ValueError("Correct the existing team's selection; set team_valid=false to request reselection")
     answered = sorted(r["correction_id"] for r in expert["responses"])
     if answered != sorted(c["correction_id"] for c in corrections):
         raise ValueError("Answer every listed correction exactly once")
@@ -359,7 +376,7 @@ def _frozen_record(w, kind, record, identity, sources=()):
     return save_asset(w.project, kind, record, identity, list(sources))
 
 
-def _review_spec(w, expert, subject):
+def _review_spec(w, expert, subject, corrections=()):
     return (
         "expert_review",
         subject,
@@ -369,6 +386,7 @@ def _review_spec(w, expert, subject):
             "expert": expert,
             "domain": w.state["knowledge"]["domain"],
             "selection": w.state["knowledge"]["selection"],
+            "corrections": list(corrections),
             "rule": "Check only decision-relevant understanding. Partial coverage is allowed when "
             "its limits do not invalidate the intended use. Author discovery history must "
             "remain unknown unless directly documented. Verify actual source anchors. "
@@ -381,19 +399,19 @@ def _review_spec(w, expert, subject):
     )
 
 
-def _settle_experts(w, specs, build):
+def _settle_experts(w, specs, build, corrections=()):
     """Build, review, and revise once with the review in hand; an expert still rejected stops the run."""
     built = build(specs, {})
     for (expert_id, *_), expert in zip(specs, built):
         if expert["status"] != "ready":
             _block(w, "; ".join(expert["missing_materials"]) or f"{expert_id}: missing core method evidence")
-    reviews = w.tasks([_review_spec(w, expert, spec[0]) for spec, expert in zip(specs, built)])
+    reviews = w.tasks([_review_spec(w, expert, spec[0], corrections) for spec, expert in zip(specs, built)])
     failed = [i for i, review in enumerate(reviews) if not review["accepted"]]
     if failed:
         retry = [specs[i] for i in failed]
         feedback = {specs[i][0]: {"previous_version": built[i], "review": reviews[i]} for i in failed}
         rebuilt = build(retry, feedback)
-        again = w.tasks([_review_spec(w, e, s[0] + "-revision") for s, e in zip(retry, rebuilt)])
+        again = w.tasks([_review_spec(w, e, s[0] + "-revision", corrections) for s, e in zip(retry, rebuilt)])
         for i, expert, review in zip(failed, rebuilt, again):
             built[i], reviews[i] = expert, review
     experts = []
@@ -678,18 +696,21 @@ def advance_knowledge(w):
         domain_spec,
         lambda specs, feedback: build(
             specs, feedback, DOMAIN_EXPERT,
-            lambda data: _validate_domain_expert(data, domain_sources, corrections, papers),
+            lambda data: _validate_domain_expert(
+                data, domain_sources, corrections, papers, selection, w.config["research"]
+            ),
         ),
+        corrections=corrections,
     )
     k["domain"] = domain_expert["domain"]
-    selection["rationale"] = domain_expert["selection_rationale"]
+    k["selection"] = domain_expert["selection"]
     k["corrections"] = {"items": corrections, "responses": domain_expert["responses"]}
     if not domain_expert["team_valid"]:
         if k.get("automatic_revision") == outer:
             _block(w, "Verified corrections still invalidate the team after an automatic domain revision")
         k["automatic_revision"] = outer
         applied = [r["change"] for r in domain_expert["responses"] if r["decision"] == "applied"]
-        revise_domain(w, "Verified corrections invalidate the team: " + "; ".join(applied))
+        _restart_domain(w, "Verified corrections invalidate the team: " + "; ".join(applied))
         w.save()
         return advance_knowledge(w)
     w.state["experts"] = [domain_expert] + method_experts

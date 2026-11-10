@@ -33,7 +33,7 @@ knowledge_gaps 每条标 scope：
 
 context.corrections 是方法专家依据原文提出、已通过独立审查的纠正。逐条回应：applied 写出改成了什么；rejected 指出原文依据，“领域总结原本这样写”不是理由。
 
-改动沿依赖传播：一处论断被改，检查引用它的路线解释、判别观测、缺口和选队理由，一并修正。selection_rationale 重写为纠正后仍成立的理由。某条路线的 method_owner 依据被推翻，或纠正揭示了无人负责的主导机制时，team_valid 判 false，系统会重新选队。
+改动沿依赖传播：一处论断被改，检查引用它的路线解释、判别观测、缺口和选队理由，一并修正。返回完整 selection，修正各成员的方法贡献与职责、临时专家理由、coverage、alternatives 和 rationale，不能只改总述。保留当前核心与临时专家的身份和来源；某条路线的 method_owner 依据被推翻，或纠正揭示了无人负责的主导机制时，team_valid 判 false，由选队阶段重新选队，不直接替换成员。
 
 ## 发现上游错误
 

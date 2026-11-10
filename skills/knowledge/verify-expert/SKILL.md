@@ -21,7 +21,7 @@ accepted 只意味着该资产可在列出的边界内使用。没有真实问�
 ## 上游纠正与回应
 
 - 方法或临时专家的 upstream_corrections：逐条对照原文，不成立的记入 errors。也检查资产里是否有与 context.domain、context.selection 矛盾却没有上报的论断。
-- 领域专家：applied 的改动要在 domain 对应字段里看得到；rejected 要有原文依据；依赖被纠正论断的其他字段要同步。每条 field 缺口的 basis 必须是语料外的实际检索，否则记 error。team_valid 为 true 时，核对每条路线 method_owner 的依据没有被推翻。
+- 领域专家：逐条对照 context.corrections 及其 source_refs；applied 的改动要在 domain 和完整 selection 的对应字段里看得到，不能只改 rationale；rejected 要有原文依据；依赖被纠正论断的其他字段要同步。每条 field 缺口的 basis 必须是语料外的实际检索，否则记 error。team_valid 为 true 时，核对每条路线 method_owner 的依据没有被推翻。
 
 ## 输出约定
 

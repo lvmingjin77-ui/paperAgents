@@ -125,7 +125,7 @@ EXPLANATION = obj(
 NOVELTY = obj({"decision": enum("distinct", "revise", "withdraw"), "reason": TEXT, "references": TEXTS})
 
 # The argument is settled from the evidence before any prose is written.
-BOUND = {"claim_refs": TEXTS, "evidence_ids": array(TEXT, 1)}
+BOUND = {"claim_refs": array(TEXT, 1), "evidence_ids": array(TEXT, 1)}
 ARGUMENT = obj(
     {
         "question": TEXT,
